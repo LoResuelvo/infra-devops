@@ -63,13 +63,3 @@ variable "ssh_public_key_path" {
     error_message = "The SSH public key path must be an absolute path ending in .pub."
   }
 }
-
-variable "ssh_allowed_cidr" {
-  description = "Single public IPv4 address authorized for SSH, expressed as a /32 CIDR."
-  type        = string
-
-  validation {
-    condition     = can(cidrhost(var.ssh_allowed_cidr, 0)) && can(regex("^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32$", var.ssh_allowed_cidr))
-    error_message = "The SSH allowed CIDR must be a valid IPv4 address with a /32 prefix."
-  }
-}

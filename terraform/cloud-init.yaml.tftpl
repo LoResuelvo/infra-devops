@@ -1,0 +1,19 @@
+#cloud-config
+
+write_files:
+  - path: /etc/ssh/sshd_config.d/99-loresuelvo-hardening.conf
+    owner: root:root
+    permissions: "0644"
+    content: |
+      PubkeyAuthentication yes
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers ubuntu
+runcmd:
+  - [install, -d, -m, "0755", /run/sshd]
+  - [/usr/sbin/sshd, -t]
+  - [ufw, default, deny, incoming]
+  - [ufw, default, allow, outgoing]
+  - [ufw, allow, "22/tcp"]
+  - [ufw, --force, enable]
