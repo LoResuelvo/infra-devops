@@ -1,218 +1,96 @@
 # Guía de usuario de Terraform
 
-Esta guía describe la operación diaria de la infraestructura efímera del
-equipo. Los comandos se ejecutan desde la raíz del repositorio con Bash.
+Los comandos se ejecutan desde la raíz del repositorio con Terraform 1.6 o
+posterior. `test` y `production` son roots distintos y nunca comparten state
+local.
 
-## Accesos y herramientas
+## Preparar un ambiente
 
-El operador necesita acceso autorizado al proyecto OVHcloud Public Cloud del
-equipo, el OpenRC del usuario OpenStack, su contraseña almacenada localmente,
-la clave privada SSH correspondiente, Terraform 1.6 o posterior y la CLI de
-OpenStack. No es necesario crear otra cuenta o proyecto OVHcloud.
-
-## Preparación local
-
-### OpenRC y contraseña
-
-El OpenRC utilizado por el equipo se guarda fuera del repositorio:
-
-```text
-~/.config/loresuelvo/openstack/openrc.sh
-```
-
-El archivo local `.env` contiene:
+Elegir un root:
 
 ```bash
-OS_PASSWORD='<contraseña-openstack>'
+TF_ROOT=terraform/environments/test/replicas
+# TF_ROOT=terraform/environments/production/replicas
+cp "$TF_ROOT/terraform.tfvars.example" "$TF_ROOT/terraform.tfvars"
 ```
 
-Ambos archivos están ignorados por Git. No se deben copiar al repositorio,
-documentación, tickets ni mensajes.
+Editar el archivo local con el nombre e IPv4 de la VM primaria existente, red,
+región, flavor, imagen y clave pública operativa. La primaria es una entrada para
+el inventario; jamás se importa ni administra desde este root.
 
-### Variables Terraform
-
-Crear la configuración local desde el ejemplo:
-
-```bash
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-```
-
-Revisar especialmente la ruta absoluta de la clave pública:
+Dejar inicialmente:
 
 ```hcl
-ssh_public_key_path = "/home/usuario/.ssh/loresuelvo_terraform.pub"
+replicas = {}
 ```
 
-Terraform lee únicamente la clave pública. La clave privada permanece en el
-equipo del operador.
+El ejemplo no contiene valores operativos. No copiar claves privadas,
+contraseñas, OpenRC ni IPs reales a archivos versionados.
 
-## Iniciar una sesión OpenStack
+## Validar sin credenciales
 
-Las credenciales deben cargarse en cada terminal nueva:
+```bash
+terraform fmt -check -recursive terraform
+terraform -chdir="$TF_ROOT" init -backend=false
+terraform -chdir="$TF_ROOT" validate
+terraform -chdir="$TF_ROOT" test
+```
+
+Los tests simulan OpenStack y no crean recursos. Repetirlos en ambos roots
+antes de revisar cambios compartidos del módulo o cloud-init.
+
+## Revisar una futura réplica
+
+Cuando exista autorización explícita, agregar una clave estable al mapa:
+
+```hcl
+replicas = {
+  "test-replica-01" = {}
+}
+```
+
+Las credenciales de OVH se cargan localmente:
 
 ```bash
 source .env
 source ~/.config/loresuelvo/openstack/openrc.sh <<< "$OS_PASSWORD"
+terraform -chdir="$TF_ROOT" plan -out=tfplan
+terraform -chdir="$TF_ROOT" show tfplan
 ```
 
-Comprobar la autenticación:
+Revisar nombres, región, flavor, imagen, cantidad de altas/bajas y ausencia de
+la VM primaria. Estos issues no autorizan `apply`: la primera réplica se creará
+en una etapa posterior mediante un plan revisado y una ejecución autorizada.
+No conectar este comando a CI antes de contar con backend remoto y locking.
+
+## Consultar inventario
+
+Sobre un state ya materializado:
 
 ```bash
-openstack token issue
+terraform -chdir="$TF_ROOT" output replicas
+terraform -chdir="$TF_ROOT" output deployment_hosts
 ```
 
-Si Terraform informa que falta `auth_url` o `cloud`, el OpenRC no fue cargado
-en la sesión actual.
+`deployment_hosts` devuelve la primaria y las réplicas ordenadas. Está pensado
+para la futura automatización multi-host, no para incorporar la primaria al
+lifecycle de Terraform.
 
-## Inicializar y validar
+## Archivos locales
 
-La primera vez, o después de cambiar los proveedores:
-
-```bash
-terraform -chdir=terraform init
-terraform -chdir=terraform fmt -check
-terraform -chdir=terraform validate
-```
-
-## Crear una instancia
-
-Generar y revisar el plan:
-
-```bash
-terraform -chdir=terraform plan -out=tfplan
-terraform -chdir=terraform show tfplan
-```
-
-Antes de continuar, comprobar:
-
-- Nombre, región, flavor e imagen.
-- Cantidad de altas, cambios y bajas.
-- Ausencia de las instancias fijas de test y producción.
-- Ausencia de reemplazos o destrucciones inesperadas.
-
-Aplicar exactamente el plan revisado:
-
-```bash
-terraform -chdir=terraform apply tfplan
-```
-
-Consultar los resultados:
-
-```bash
-terraform -chdir=terraform output
-terraform -chdir=terraform output -raw ssh_command
-```
-
-## Conectarse y verificar
-
-Cloud-init puede tardar algunos segundos después de que OpenStack marque la
-instancia como `ACTIVE`:
-
-```bash
-ssh -i ~/.ssh/loresuelvo_terraform ubuntu@IP_PUBLICA
-```
-
-Dentro de la instancia:
-
-```bash
-cloud-init status --wait
-sudo ufw status verbose
-sudo sshd -T | grep -E '^(port|passwordauthentication|kbdinteractiveauthentication|permitrootlogin|pubkeyauthentication|allowusers) '
-```
-
-El resultado esperado es cloud-init en `done`, UFW activo con entrada denegada
-por defecto y solo `22/tcp` permitido, autenticación por clave habilitada,
-contraseñas y root deshabilitados, y `AllowUsers ubuntu`.
-
-## Destruir y detener la facturación
-
-Generar y revisar un plan específico de destrucción:
-
-```bash
-terraform -chdir=terraform plan -destroy -out=destroy.tfplan
-terraform -chdir=terraform show destroy.tfplan
-```
-
-El plan esperado elimina únicamente la instancia efímera y su keypair:
-
-```bash
-terraform -chdir=terraform apply destroy.tfplan
-```
-
-Confirmar la eliminación:
-
-```bash
-terraform -chdir=terraform state list
-openstack server list --name loresuelvo-iac-test
-```
-
-Una instancia apagada puede continuar facturándose; hay que destruir el
-recurso.
-
-## Secuencia completa de referencia
-
-```bash
-source .env
-source ~/.config/loresuelvo/openstack/openrc.sh <<< "$OS_PASSWORD"
-
-terraform -chdir=terraform init
-terraform -chdir=terraform fmt -check
-terraform -chdir=terraform validate
-terraform -chdir=terraform plan -out=tfplan
-terraform -chdir=terraform show tfplan
-terraform -chdir=terraform apply tfplan
-
-# Realizar las pruebas.
-
-terraform -chdir=terraform plan -destroy -out=destroy.tfplan
-terraform -chdir=terraform show destroy.tfplan
-terraform -chdir=terraform apply destroy.tfplan
-```
-
-## Problemas frecuentes
-
-### Falta `auth_url` o `cloud`
-
-El OpenRC no está cargado. Repetir “Iniciar una sesión OpenStack”.
-
-### Error `401`
-
-Comprobar la contraseña local y descargar un OpenRC actualizado para el mismo
-usuario y proyecto si fuera necesario.
-
-### Error `409 OverQuota` de security groups
-
-El proyecto no dispone de cuota para crear grupos o reglas adicionales. La
-configuración actual reutiliza `default` y filtra dentro de Ubuntu con UFW.
-
-### La VM está activa pero SSH no responde
-
-Esperar a que cloud-init termine. Si continúa inaccesible, consultar la consola:
-
-```bash
-openstack console log show ID_DE_INSTANCIA
-```
-
-### Terraform propone reemplazar la instancia
-
-Cambios en `user_data`, imagen u otros atributos inmutables requieren destruir
-y recrear la VM. Revisar el plan antes de aceptarlo.
-
-## Archivos que nunca deben agregarse a Git
+Nunca agregar a Git:
 
 ```text
 .env
 *openrc*
-terraform/terraform.tfvars
+terraform.tfvars
 *.tfstate
 *.tfstate.*
 *.tfplan
 .terraform/
+plan.md
 ```
 
-Ante una duda:
-
-```bash
-git status --short --ignored
-git check-ignore -v RUTA_DEL_ARCHIVO
-```
+Comprobar cualquier archivo dudoso con `git check-ignore -v RUTA`. Los state,
+plan y tfvars históricos en `terraform/` se conservan localmente y no deben
+moverse o borrarse automáticamente.

@@ -1,65 +1,47 @@
 # LoResuelvo — infraestructura y DevOps
 
 Infraestructura como código y herramientas operativas del equipo LoResuelvo.
+Terraform modela réplicas de aplicación en OVHcloud/OpenStack mediante dos
+roots independientes: test y producción. Las VMs primarias existentes solo
+forman parte del inventario de salida y están completamente fuera del lifecycle
+de Terraform.
 
-La implementación actual permite crear una instancia efímera Ubuntu en el
-proyecto OVHcloud Public Cloud del equipo. Terraform administra la instancia y
-su clave pública; cloud-init configura SSH y el firewall durante el primer
-arranque.
-
-## Arquitectura actual
+## Estructura
 
 ```text
-Terraform
-   │
-   ▼
-OVHcloud Public Cloud / OpenStack / BHS5
-   ├── instancia d2-4 con Ubuntu 24.04
-   ├── red pública Ext-Net
-   └── security group default
-             │
-             ▼
-        UFW en Ubuntu
-        ├── entrada bloqueada por defecto
-        └── SSH 22 permitido
-             │
-             ▼
-        OpenSSH
-        ├── solo clave pública
-        ├── usuario ubuntu
-        ├── sin contraseñas
-        └── sin login de root
+terraform/
+├── environments/
+│   ├── test/replicas/        # root y state local de test
+│   └── production/replicas/  # root y state local de producción
+├── modules/application-node/ # imagen, keypair y VM reutilizables
+└── cloud-init.yaml.tftpl     # bootstrap básico heredado
 ```
+
+Cada root recibe un mapa `replicas`. Su valor por defecto es `{}`: inicializar,
+validar o probar el código no decide crear VMs. Los nombres son las claves
+estables del mapa y los outputs exponen `replica_ids`, `replica_ipv4`,
+`replicas` y el inventario combinado `deployment_hosts`.
+
+## Validación segura
+
+```bash
+terraform fmt -check -recursive terraform
+terraform -chdir=terraform/environments/test/replicas init -backend=false
+terraform -chdir=terraform/environments/test/replicas validate
+terraform -chdir=terraform/environments/test/replicas test
+terraform -chdir=terraform/environments/production/replicas init -backend=false
+terraform -chdir=terraform/environments/production/replicas validate
+terraform -chdir=terraform/environments/production/replicas test
+```
+
+Los tests usan un provider mock: no requieren credenciales ni acceden a OVH.
+No se debe automatizar ni ejecutar `terraform apply` hasta revisar un plan y,
+antes del provisioning automatizado, migrar a un backend remoto compartido con
+locking.
 
 ## Documentación
 
-- [Guía de usuario](docs/user-guide.md): preparación local, flujo
-  `init/plan/apply`, conexión SSH, verificación y destrucción.
-- [Guía técnica](docs/technical-guide.md): arquitectura, glosario,
-  explicación del código Terraform y guía de cloud-init.
-
-## Uso rápido
-
-Con acceso autorizado al proyecto del equipo y los archivos locales ya
-preparados:
-
-```bash
-source .env
-source ~/.config/loresuelvo/openstack/openrc.sh <<< "$OS_PASSWORD"
-
-terraform -chdir=terraform init
-terraform -chdir=terraform validate
-terraform -chdir=terraform plan -out=tfplan
-terraform -chdir=terraform show tfplan
-terraform -chdir=terraform apply tfplan
-```
-
-La instancia se factura mientras exista. Al finalizar las pruebas:
-
-```bash
-terraform -chdir=terraform plan -destroy -out=destroy.tfplan
-terraform -chdir=terraform show destroy.tfplan
-terraform -chdir=terraform apply destroy.tfplan
-```
-
-Detener o apagar la máquina no reemplaza la destrucción del recurso.
+- [Guía de usuario](docs/user-guide.md): preparación, comandos por ambiente,
+  outputs y verificación operativa.
+- [Guía técnica](docs/technical-guide.md): state, límites de lifecycle,
+  topología y tests.
