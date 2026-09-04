@@ -1,0 +1,19 @@
+environment = "production"
+
+primary_instance = {
+  name = "replace-with-existing-production-primary"
+  ipv4 = "192.0.2.20"
+}
+
+# Deliberately empty: replicas are created only after an explicit review.
+replicas = {}
+# replicas = {
+#   "production-replica-01" = {}
+# }
+
+region            = "BHS5"
+image_name        = "Ubuntu 24.04"
+flavor_name       = "d2-4"
+public_network_id = "00000000-0000-0000-0000-000000000000"
+
+operator_ssh_public_key = "ssh-ed25519 REPLACE_WITH_OPERATOR_PUBLIC_KEY"
