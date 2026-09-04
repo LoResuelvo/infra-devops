@@ -60,6 +60,14 @@
     - Reload systemd
     - Restart Docker firewall
 
+- name: Create Docker service override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Install Docker restart integration
   ansible.builtin.copy:
     dest: /etc/systemd/system/docker.service.d/10-loresuelvo-firewall.conf

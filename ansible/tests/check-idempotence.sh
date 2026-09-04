@@ -15,7 +15,7 @@ playbook="$ansible_root/playbooks/configure-application-nodes.yml"
 output=$(mktemp)
 trap 'rm -f "$output"' EXIT
 
-export ANSIBLE_CONFIG="$ansible_root/ansible.cfg"
+export ANSIBLE_CONFIG="$repository_root/ansible.cfg"
 
 "$repository_root/.venv/bin/ansible-playbook" \
   -i "$inventory" \

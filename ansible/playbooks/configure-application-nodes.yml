@@ -25,3 +25,12 @@
     - role: docker
     - role: deploy_user
     - role: firewall
+
+  post_tasks:
+    - name: Write node configuration marker
+      ansible.builtin.copy:
+        dest: /etc/loresuelvo/configuration-version
+        owner: root
+        group: root
+        mode: "0644"
+        content: "{{ loresuelvo_configuration_version }}\n"

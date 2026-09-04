@@ -13,8 +13,13 @@ terraform/
 ├── environments/
 │   ├── test/replicas/        # root y state local de test
 │   └── production/replicas/  # root y state local de producción
-├── modules/application-node/ # imagen, keypair y VM reutilizables
-└── cloud-init.yaml.tftpl     # bootstrap básico heredado
+└── modules/application-node/ # imagen, keypair, VM y user_data
+cloud-init/
+└── application-node.yaml     # acceso mínimo para Ansible
+ansible/
+├── inventories/              # ejemplos; hosts.yml reales ignorados
+├── playbooks/                # configuración y verificación
+└── roles/                    # nodo base, Docker, deploy y firewall
 ```
 
 Cada root recibe un mapa `replicas`. Su valor por defecto es `{}`: inicializar,
@@ -39,9 +44,29 @@ No se debe automatizar ni ejecutar `terraform apply` hasta revisar un plan y,
 antes del provisioning automatizado, migrar a un backend remoto compartido con
 locking.
 
+## Bootstrap y configuración
+
+Cloud-init solo deja Ubuntu administrable como `ubuntu`: actualización inicial,
+Python, sudo, UFW con SSH y autenticación SSH por clave. Ansible crea `deploy`,
+instala las versiones fijadas de Docker, configura firewall, actualizaciones y
+los directorios raíz `/opt/loresuelvo` y `/etc/loresuelvo`. Los deployments de
+API y webapp crearán sus propios subdirectorios posteriormente.
+
+Ansible se instala únicamente en el equipo controlador:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r ansible/requirements-dev.txt
+ansible-galaxy collection install -r ansible/requirements.yml
+```
+
+Las versiones fijadas son `ansible-core 2.21.3`, `ansible-lint 26.8.0`,
+`community.general 13.3.0` y `community.docker 5.2.2`.
+
 ## Documentación
 
 - [Guía de usuario](docs/user-guide.md): preparación, comandos por ambiente,
-  outputs y verificación operativa.
+  configuración Ansible y prueba temporal en OVH.
 - [Guía técnica](docs/technical-guide.md): state, límites de lifecycle,
-  topología y tests.
+  responsabilidades, bootstrap y diseño de roles.

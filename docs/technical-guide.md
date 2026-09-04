@@ -1,12 +1,20 @@
-# Guía técnica de Terraform y bootstrap
+# Guía técnica de infraestructura y configuración
+
+## Separación de responsabilidades
+
+| Capa | Responsabilidad |
+|---|---|
+| Roots Terraform | Deciden cuántas réplicas existen en test y producción. |
+| `application-node` | Crea keypair, VM, red y entrega `user_data`. |
+| Cloud-init | Deja Ubuntu accesible como `ubuntu` con Python, sudo y SSH seguro. |
+| Ansible | Configura usuario, Docker, firewall, actualizaciones y nodo. |
+| Deployments | Configurarán API y webapp; están fuera de este incremento. |
 
 ## Topología y lifecycle
 
 `terraform/environments/test/replicas` y
 `terraform/environments/production/replicas` son roots independientes. Cada
-uno mantiene su propia configuración, variables, lock file, directorio de
-trabajo y state local. Ambos llaman a `modules/application-node` para crear
-exclusivamente réplicas.
+uno mantiene su propia configuración, directorio de trabajo y state local.
 
 ```text
 primary_instance (input, no administrado) ─┐
@@ -14,55 +22,64 @@ primary_instance (input, no administrado) ─┐
 replicas (map for_each) ─ módulo ─ VMs ────┘
 ```
 
-`primary_instance` contiene solo `name` e `ipv4`. No alimenta ningún `resource`
-ni `data source`, por lo que Terraform no puede modificar o destruir la VM
-primaria. `replicas` es `map(object({}))`; cada clave es a la vez la identidad
-de `for_each` y el nombre estable de la VM. El default `{}` produce cero
-recursos.
+`primary_instance` contiene solo nombre e IPv4 y no alimenta recursos. El mapa
+`replicas` usa sus claves como identidades estables; el default `{}` crea cero
+recursos. El módulo registra únicamente la clave pública operativa, busca la
+imagen y crea la VM conectada a la red indicada.
 
-El módulo consulta la imagen, registra un keypair que contiene únicamente la
-clave pública operativa y crea una instancia conectada a la red pública. Las
-credenciales OpenStack siguen llegando mediante variables `OS_*`; ninguna se
-declara en HCL.
+Cada root recibe `environment`, `primary_instance`, `replicas`, región, imagen,
+flavor, red y `operator_ssh_public_key`. Los outputs exponen IDs e IPv4 por
+nombre, el mapa de réplicas y `deployment_hosts`, con la primaria de referencia
+seguida por las réplicas ordenadas.
 
-## State
+## State y secretos
 
-El state relaciona una dirección como
-`module.replica["test-replica-01"]` con el ID real asignado por OpenStack. Sin
-esa relación Terraform podría intentar duplicar recursos o no conocer el
-objeto que debe actualizar o destruir.
+Cada root usa state local e independiente. `*.tfstate`, `*.tfvars`, planes y
+`.terraform/` están ignorados. Antes de automatizar `apply` se necesita una
+migración explícita a un backend remoto cifrado, compartido y con locking.
+Credenciales OpenStack, claves privadas, inventarios reales y claves de
+deployment nunca se declaran en archivos versionados.
 
-Por ahora cada root usa state local e independiente. `*.tfstate`, `*.tfvars`,
-`.terraform/` y planes están ignorados. Los artefactos locales que pertenecían
-al root anterior se conservan en `terraform/` como respaldo histórico: no se
-borran, migran ni reutilizan automáticamente. Antes de automatizar provisioning
-se debe diseñar una migración explícita a un backend remoto compartido, cifrado
-y con locking. Hasta entonces no se automatiza `apply`.
+## Cloud-init mínimo
 
-## Variables y outputs
+`cloud-init/application-node.yaml` es el `user_data` común. Su marca es
+`2026-09-04.1`. Actualiza Ubuntu, permite el reboot inicial cuando los paquetes
+lo requieren, instala Python 3, sudo y UFW, abre únicamente SSH y restringe el
+acceso a `ubuntu` con clave pública. Es deliberadamente ajeno a Docker,
+`deploy` y las aplicaciones.
 
-Cada root recibe:
+## Configuración Ansible
 
-- `environment` y `primary_instance`;
-- `replicas`, vacío por defecto;
-- `region`, `image_name`, `flavor_name` y `public_network_id`;
-- `operator_ssh_public_key`.
+El controlador usa Python 3.12 y `ansible-core 2.21.3`; el nodo remoto solo
+necesita Python y SSH. `ansible/requirements.yml` fija
+`community.general 13.3.0` y `community.docker 5.2.2`. Los roles aplican:
 
-Los ejemplos versionados usan direcciones reservadas para documentación y
-claves ficticias. Los valores reales viven en un `terraform.tfvars` dentro del
-root correspondiente y permanecen ignorados.
+- `base_node`: paquetes base, actualizaciones de seguridad sin reboot,
+  `/opt/loresuelvo`, `/etc/loresuelvo` y marca de configuración;
+- `docker`: repositorio oficial, Docker CE/CLI `29.7.2`, containerd `2.3.3`,
+  Buildx `0.36.1`, Compose `5.4.0`, paquetes en hold, rotación de logs y
+  `live-restore`;
+- `deploy_user`: usuario sin contraseña, claves requeridas, grupo `docker` y
+  ampliación de `AllowUsers` a `ubuntu deploy`;
+- `firewall`: UFW 22/80/443 y política persistente de `DOCKER-USER` que admite
+  conexiones establecidas y tráfico web y descarta el resto.
 
-Los outputs son mapas de IDs e IPv4, el mapa completo de réplicas y
-`deployment_hosts`. Este último contiene primero la primaria y luego las
-réplicas ordenadas por nombre. No se exponen credenciales, claves privadas ni
-user data.
+Ansible crea `app-network`, pero no subdirectorios de API o webapp. Las claves
+solo se suministran desde `ansible/vars/deploy-keys.yml`, que está ignorado.
 
-## Validación sin OVH
+## Validación
 
-`terraform test` usa `mock_provider "openstack"` para comprobar:
+Los tests mock de Terraform verifican cero réplicas por defecto, identidades
+estables, inventario y cloud-init YAML válido con SSH/Python/UFW y sin Docker ni
+`deploy`. La capa Ansible se valida con inventario, syntax-check y
+`ansible-lint`.
 
-- cero réplicas con el default;
-- dos nombres estables con inventario ordenado;
-- inventario combinado con la primaria.
+En una réplica configurada, `verify-application-nodes.yml` comprueba usuarios y
+claves, SSH, paquetes y holds de Docker, daemon, Compose, `app-network`,
+servicios, directorios raíz, UFW, `DOCKER-USER`, actualizaciones y marcas. El
+script `ansible/tests/check-idempotence.sh` ejecuta dos pasadas y exige
+`changed=0`, `unreachable=0` y `failed=0` en la segunda.
 
-No se ejecutan planes reales ni `apply` como parte de esta validación.
+Los tests locales no crean recursos ni acceden a OVH. Una prueba real debe usar
+exclusivamente una réplica temporal declarada en el mapa de test, con planes de
+alta y baja revisados, y debe destruirla incluso si una validación falla.

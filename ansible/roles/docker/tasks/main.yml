@@ -3,36 +3,35 @@
   ansible.builtin.set_fact:
     docker_apt_architecture: "{{ {'x86_64': 'amd64', 'aarch64': 'arm64'}[ansible_facts.architecture] }}"
 
-- name: Create APT keyring directory
-  ansible.builtin.file:
-    path: /etc/apt/keyrings
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: Install Docker repository signing key
-  ansible.builtin.get_url:
-    url: https://download.docker.com/linux/ubuntu/gpg
-    dest: /etc/apt/keyrings/docker.asc
-    owner: root
-    group: root
-    mode: "0644"
-
 - name: Configure Docker APT repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [arch={{ docker_apt_architecture }} signed-by=/etc/apt/keyrings/docker.asc]
-      https://download.docker.com/linux/ubuntu {{ ansible_facts.distribution_release }} stable
-    filename: docker
+  ansible.builtin.deb822_repository:
+    name: docker
+    types:
+      - deb
+    uris:
+      - https://download.docker.com/linux/ubuntu
+    suites:
+      - "{{ ansible_facts.distribution_release }}"
+    components:
+      - stable
+    architectures:
+      - "{{ docker_apt_architecture }}"
+    signed_by: https://download.docker.com/linux/ubuntu/gpg
+    install_python_debian: true
     state: present
+  register: docker_repository
+
+- name: Update APT cache for Docker repository
+  ansible.builtin.apt:
     update_cache: true
+    cache_valid_time: "{{ 0 if docker_repository.changed else 3600 }}"
 
 - name: Install pinned Docker packages
   ansible.builtin.apt:
-    name: "{{ docker_apt_versions | dict2items | map('join', '=') | list }}"
+    name: "{{ item.key }}={{ item.value }}"
     state: present
     allow_downgrade: true
+  loop: "{{ docker_apt_versions | dict2items }}"
   notify: Restart Docker
 
 - name: Hold Docker package versions
