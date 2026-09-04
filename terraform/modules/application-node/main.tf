@@ -17,7 +17,7 @@ resource "openstack_compute_instance_v2" "instance" {
   key_pair        = openstack_compute_keypair_v2.instance.name
   security_groups = ["default"]
 
-  user_data = file("${path.module}/../../cloud-init.yaml.tftpl")
+  user_data = file("${path.module}/../../../cloud-init/application-node.yaml")
 
   network {
     uuid = var.public_network_id

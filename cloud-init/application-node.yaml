@@ -1,7 +1,16 @@
 #cloud-config
 
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
+
+packages:
+  - python3
+  - sudo
+  - ufw
+
 write_files:
-  - path: /etc/ssh/sshd_config.d/99-loresuelvo-hardening.conf
+  - path: /etc/ssh/sshd_config.d/99-loresuelvo-bootstrap.conf
     owner: root:root
     permissions: "0644"
     content: |
@@ -10,10 +19,16 @@ write_files:
       KbdInteractiveAuthentication no
       PermitRootLogin no
       AllowUsers ubuntu
+
 runcmd:
   - [install, -d, -m, "0755", /run/sshd]
   - [/usr/sbin/sshd, -t]
+  - [systemctl, reload, ssh]
   - [ufw, default, deny, incoming]
   - [ufw, default, allow, outgoing]
   - [ufw, allow, "22/tcp"]
   - [ufw, --force, enable]
+  - [install, -d, -m, "0755", /etc/loresuelvo]
+  - [bash, -c, "printf '%s\\n' '2026-09-04.1' > /etc/loresuelvo/bootstrap-version"]
+
+final_message: "LoResuelvo application node bootstrap 2026-09-04.1 completed"

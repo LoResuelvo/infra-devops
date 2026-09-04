@@ -31,6 +31,48 @@ variables {
   operator_ssh_public_key = "ssh-ed25519 AAAAoperator fixture"
 }
 
+run "rendered_cloud_init_policy" {
+  command = plan
+
+  variables {
+    replicas = {
+      "test-replica-fixture" = {}
+    }
+  }
+
+  assert {
+    condition     = can(yamldecode(module.replica["test-replica-fixture"].user_data))
+    error_message = "Rendered cloud-init must be valid YAML."
+  }
+
+  assert {
+    condition     = contains(yamldecode(module.replica["test-replica-fixture"].user_data).packages, "python3")
+    error_message = "Rendered cloud-init must install Python for Ansible."
+  }
+
+  assert {
+    condition = alltrue([
+      for expected in [
+        "sudo",
+        "ufw",
+        "AllowUsers ubuntu",
+        "PasswordAuthentication no",
+        "ufw, allow, \"22/tcp\"",
+        "/etc/loresuelvo/bootstrap-version",
+      ] : strcontains(module.replica["test-replica-fixture"].user_data, expected)
+    ])
+    error_message = "Rendered cloud-init must contain only the minimum access bootstrap."
+  }
+
+  assert {
+    condition = alltrue([
+      for forbidden in ["docker", "deploy", "/opt/loresuelvo"] :
+      !strcontains(lower(module.replica["test-replica-fixture"].user_data), forbidden)
+    ])
+    error_message = "Cloud-init must leave Docker, deploy, and application directories to Ansible."
+  }
+}
+
 run "zero_replicas_by_default" {
   command = plan
 
