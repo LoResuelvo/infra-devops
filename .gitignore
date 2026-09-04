@@ -27,3 +27,10 @@ override.tf.json
 
 # Local environment files
 .env
+.venv/
+
+# Local Ansible inventories, keys, and retry artifacts
+ansible/inventories/*/hosts.yml
+ansible/vars/deploy-keys.yml
+ansible/collections/
+*.retry

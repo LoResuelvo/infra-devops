@@ -1,0 +1,27 @@
+---
+- name: Configure LoResuelvo application nodes
+  hosts: application_nodes
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Require Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == "Ubuntu"
+          - ansible_facts.distribution_version is version('24.04', '==')
+        fail_msg: This playbook supports Ubuntu 24.04 only.
+
+    - name: Require deployment public keys
+      ansible.builtin.assert:
+        that:
+          - deploy_ssh_public_keys is defined
+          - deploy_ssh_public_keys | length > 0
+          - deploy_ssh_public_keys | select('match', '^(ssh-(rsa|ed25519)|ecdsa-sha2-nistp(256|384|521)) ') | list | length == deploy_ssh_public_keys | length
+        fail_msg: Set at least one valid deploy_ssh_public_keys entry.
+
+  roles:
+    - role: base_node
+    - role: docker
+    - role: deploy_user
+    - role: firewall

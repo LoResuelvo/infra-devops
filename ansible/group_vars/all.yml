@@ -1,0 +1,25 @@
+---
+loresuelvo_configuration_version: "2026-09-04.1"
+
+docker_apt_versions:
+  docker-ce: "5:29.7.2-1~ubuntu.24.04~noble"
+  docker-ce-cli: "5:29.7.2-1~ubuntu.24.04~noble"
+  containerd.io: "2.3.3-1~ubuntu.24.04~noble"
+  docker-buildx-plugin: "0.36.1-1~ubuntu.24.04~noble"
+  docker-compose-plugin: "5.4.0-1~ubuntu.24.04~noble"
+
+docker_daemon_options:
+  log-driver: json-file
+  log-opts:
+    max-size: 10m
+    max-file: "5"
+  live-restore: true
+
+application_root_directories:
+  - /opt/loresuelvo
+  - /etc/loresuelvo
+
+application_ingress_tcp_ports:
+  - 22
+  - 80
+  - 443

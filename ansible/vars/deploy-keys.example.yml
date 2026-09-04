@@ -1,0 +1,4 @@
+---
+# Copy to deploy-keys.yml (ignored by Git) and replace with operational keys.
+deploy_ssh_public_keys:
+  - ssh-ed25519 REPLACE_WITH_DEPLOYMENT_PUBLIC_KEY

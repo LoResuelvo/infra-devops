@@ -1,0 +1,8 @@
+---
+all:
+  children:
+    application_nodes:
+      hosts:
+        production-replica-01:
+          ansible_host: 192.0.2.41
+          ansible_user: ubuntu

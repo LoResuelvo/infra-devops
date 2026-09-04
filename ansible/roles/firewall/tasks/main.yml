@@ -1,0 +1,83 @@
+---
+- name: Set default incoming firewall policy
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+
+- name: Set default outgoing firewall policy
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+
+- name: Allow application ingress ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+  loop: "{{ application_ingress_tcp_ports }}"
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+- name: Install Docker ingress policy script
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/loresuelvo-docker-firewall
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      add_rule() {
+        iptables -C DOCKER-USER "$@" 2>/dev/null || iptables -I DOCKER-USER 1 "$@"
+      }
+      add_rule -j DROP
+      add_rule -p tcp -m multiport --dports 80,443 -j ACCEPT
+      add_rule -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  notify: Restart Docker firewall
+
+- name: Install Docker ingress policy service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/loresuelvo-docker-firewall.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=LoResuelvo Docker ingress policy
+      Requires=docker.service
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/loresuelvo-docker-firewall
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - Reload systemd
+    - Restart Docker firewall
+
+- name: Install Docker restart integration
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.service.d/10-loresuelvo-firewall.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Service]
+      ExecStartPost=/usr/local/sbin/loresuelvo-docker-firewall
+  notify:
+    - Reload systemd
+    - Restart Docker firewall
+
+- name: Apply pending firewall handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable Docker ingress policy
+  ansible.builtin.systemd_service:
+    name: loresuelvo-docker-firewall.service
+    enabled: true
+    state: started

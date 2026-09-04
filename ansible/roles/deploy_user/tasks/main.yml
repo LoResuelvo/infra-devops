@@ -1,0 +1,43 @@
+---
+- name: Create passwordless deployment user
+  ansible.builtin.user:
+    name: deploy
+    comment: LoResuelvo deployment user
+    groups:
+      - docker
+    append: true
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+    state: present
+
+- name: Create deployment SSH directory
+  ansible.builtin.file:
+    path: /home/deploy/.ssh
+    state: directory
+    owner: deploy
+    group: deploy
+    mode: "0700"
+
+- name: Install deployment SSH public keys
+  ansible.builtin.copy:
+    dest: /home/deploy/.ssh/authorized_keys
+    owner: deploy
+    group: deploy
+    mode: "0600"
+    content: "{{ deploy_ssh_public_keys | map('trim') | unique | join('\n') }}\n"
+
+- name: Allow only administrative and deployment SSH users
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-loresuelvo-bootstrap.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      PubkeyAuthentication yes
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      AllowUsers ubuntu deploy
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload SSH
