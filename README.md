@@ -64,6 +64,18 @@ ansible-galaxy collection install -r ansible/requirements.yml
 Las versiones fijadas son `ansible-core 2.21.3`, `ansible-lint 26.8.0`,
 `community.general 13.3.0` y `community.docker 5.2.2`.
 
+Después de aplicar manualmente la réplica temporal, el enlace desde el output de
+Terraform hasta Ansible se automatiza con:
+
+```bash
+scripts/configure-test-ansible-validation.sh
+```
+
+El script exige que el state contenga únicamente
+`test-ansible-validation-01`; genera el inventario ignorado, espera SSH y
+cloud-init, comprueba idempotencia y ejecuta la verificación. Nunca ejecuta
+`terraform plan`, `apply` ni `destroy`.
+
 ## Documentación
 
 - [Guía de usuario](docs/user-guide.md): preparación, comandos por ambiente,

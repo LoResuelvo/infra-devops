@@ -89,9 +89,10 @@ una VM y keypair, `terraform.tfvars` real y claves de deployment reales.
    test.
 2. Generar y revisar un plan que agregue solo esa VM y su keypair; aplicar
    manualmente.
-3. Obtener la IP con `terraform output replica_ipv4`, completar el inventario y
-   esperar cloud-init/SSH.
-4. Ejecutar configuración, la segunda pasada con `changed=0` y verificación.
+3. Ejecutar `scripts/configure-test-ansible-validation.sh`. El script obtiene la
+   única IP desde `replica_ipv4`, genera el inventario ignorado, espera
+   cloud-init/SSH, ejecuta dos pasadas y verifica `changed=0` en la segunda.
+4. Revisar el resultado del playbook de verificación.
 5. Quitar la réplica del mapa, revisar que el plan destruya solo la VM temporal
    y su keypair, aplicar y confirmar su ausencia en Terraform y OpenStack.
 
