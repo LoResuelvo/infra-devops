@@ -1,0 +1,151 @@
+---
+- name: Verify LoResuelvo application nodes
+  hosts: application_nodes
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Read local users
+      ansible.builtin.getent:
+        database: passwd
+
+    - name: Read deploy groups
+      ansible.builtin.command: id -nG deploy
+      register: deploy_groups
+      changed_when: false
+
+    - name: Read effective SSH configuration
+      ansible.builtin.command: /usr/sbin/sshd -T
+      register: sshd_configuration
+      changed_when: false
+
+    - name: Inspect deployment authorized keys
+      ansible.builtin.slurp:
+        src: /home/deploy/.ssh/authorized_keys
+      register: deploy_authorized_keys
+
+    - name: Inspect Docker package versions
+      ansible.builtin.command:
+        argv:
+          - dpkg-query
+          - -W
+          - "-f=${Version}"
+          - "{{ item.key }}"
+      loop: "{{ docker_apt_versions | dict2items }}"
+      register: installed_docker_versions
+      changed_when: false
+
+    - name: Inspect Docker package selections
+      ansible.builtin.command: "dpkg --get-selections {{ item.key }}"
+      loop: "{{ docker_apt_versions | dict2items }}"
+      register: docker_package_selections
+      changed_when: false
+
+    - name: Read Docker daemon configuration
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: docker_daemon_configuration
+
+    - name: Check Docker daemon
+      ansible.builtin.command: docker info
+      changed_when: false
+
+    - name: Check Docker Compose plugin
+      ansible.builtin.command: docker compose version
+      changed_when: false
+
+    - name: Check application Docker network
+      ansible.builtin.command: docker network inspect app-network
+      changed_when: false
+
+    - name: Gather service state
+      ansible.builtin.service_facts:
+
+    - name: Check enabled services  # noqa command-instead-of-module
+      ansible.builtin.command: "systemctl is-enabled {{ item }}"
+      loop:
+        - docker.service
+        - unattended-upgrades.service
+        - loresuelvo-docker-firewall.service
+      changed_when: false
+
+    - name: Inspect LoResuelvo root directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: "{{ application_root_directories }}"
+      register: application_directories
+
+    - name: Read UFW status
+      ansible.builtin.command: ufw status
+      register: ufw_status
+      changed_when: false
+
+    - name: Check Docker ingress policy rules
+      ansible.builtin.command:
+        argv: "{{ item }}"
+      loop:
+        - [iptables, -C, DOCKER-USER, -m, conntrack, --ctstate, "RELATED,ESTABLISHED", -j, ACCEPT]
+        - [iptables, -C, DOCKER-USER, -p, tcp, -m, multiport, --dports, "80,443", -j, ACCEPT]
+        - [iptables, -C, DOCKER-USER, -j, DROP]
+      changed_when: false
+
+    - name: Read update and version markers
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/apt/apt.conf.d/52loresuelvo-unattended-upgrades
+        - /etc/loresuelvo/bootstrap-version
+        - /etc/loresuelvo/configuration-version
+      register: node_configuration_files
+
+    - name: Verify users and SSH policy
+      ansible.builtin.assert:
+        that:
+          - "'ubuntu' in ansible_facts.getent_passwd"
+          - "'deploy' in ansible_facts.getent_passwd"
+          - "'docker' in deploy_groups.stdout.split()"
+          - "'passwordauthentication no' in sshd_configuration.stdout_lines"
+          - "'kbdinteractiveauthentication no' in sshd_configuration.stdout_lines"
+          - "'permitrootlogin no' in sshd_configuration.stdout_lines"
+          - "'allowusers ubuntu deploy' in sshd_configuration.stdout_lines"
+          - deploy_authorized_keys.content | b64decode == (deploy_ssh_public_keys | map('trim') | unique | join('\n')) + '\n'
+
+    - name: Verify pinned Docker packages
+      ansible.builtin.assert:
+        that:
+          - item.stdout == item.item.value
+          - docker_package_selections.results[ansible_loop.index0].stdout.split()[-1] == 'hold'
+      loop: "{{ installed_docker_versions.results }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+        extended: true
+
+    - name: Verify Docker configuration
+      ansible.builtin.assert:
+        that:
+          - docker_daemon_configuration.content | b64decode | from_json == docker_daemon_options
+          - ansible_facts.services['docker.service'].state == 'running'
+          - ansible_facts.services['unattended-upgrades.service'].state == 'running'
+          - ansible_facts.services['loresuelvo-docker-firewall.service'].state == 'running'
+
+    - name: Verify root directories
+      ansible.builtin.assert:
+        that:
+          - item.stat.isdir
+          - item.stat.pw_name == 'root'
+          - item.stat.gr_name == 'root'
+          - item.stat.mode == '0755'
+      loop: "{{ application_directories.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Verify firewall, updates, and markers
+      ansible.builtin.assert:
+        that:
+          - "'Status: active' in ufw_status.stdout"
+          - "'22/tcp' in ufw_status.stdout"
+          - "'80/tcp' in ufw_status.stdout"
+          - "'443/tcp' in ufw_status.stdout"
+          - "'Unattended-Upgrade::Automatic-Reboot \"false\";' in (node_configuration_files.results[0].content | b64decode)"
+          - node_configuration_files.results[1].content | b64decode | trim == '2026-09-04.1'
+          - node_configuration_files.results[2].content | b64decode | trim == loresuelvo_configuration_version
