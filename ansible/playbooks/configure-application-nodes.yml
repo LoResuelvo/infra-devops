@@ -4,6 +4,9 @@
   become: true
   gather_facts: true
 
+  vars_files:
+    - ../group_vars/all.yml
+
   pre_tasks:
     - name: Require Ubuntu 24.04
       ansible.builtin.assert:

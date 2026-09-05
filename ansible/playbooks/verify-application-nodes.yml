@@ -4,6 +4,9 @@
   become: true
   gather_facts: true
 
+  vars_files:
+    - ../group_vars/all.yml
+
   tasks:
     - name: Read local users
       ansible.builtin.getent:
@@ -69,6 +72,15 @@
         - loresuelvo-docker-firewall.service
       changed_when: false
 
+    - name: Check active services  # noqa command-instead-of-module
+      ansible.builtin.command: "systemctl is-active {{ item }}"
+      loop:
+        - docker.service
+        - unattended-upgrades.service
+        - loresuelvo-docker-firewall.service
+      register: active_services
+      changed_when: false
+
     - name: Inspect LoResuelvo root directories
       ansible.builtin.stat:
         path: "{{ item }}"
@@ -107,7 +119,8 @@
           - "'passwordauthentication no' in sshd_configuration.stdout_lines"
           - "'kbdinteractiveauthentication no' in sshd_configuration.stdout_lines"
           - "'permitrootlogin no' in sshd_configuration.stdout_lines"
-          - "'allowusers ubuntu deploy' in sshd_configuration.stdout_lines"
+          - "'allowusers ubuntu' in sshd_configuration.stdout_lines"
+          - "'allowusers deploy' in sshd_configuration.stdout_lines"
           - deploy_authorized_keys.content | b64decode == (deploy_ssh_public_keys | map('trim') | unique | join('\n')) + '\n'
 
     - name: Verify pinned Docker packages
@@ -119,6 +132,7 @@
       loop_control:
         label: "{{ item.item.key }}"
         extended: true
+        extended_allitems: false
 
     - name: Verify Docker configuration
       ansible.builtin.assert:
@@ -126,7 +140,7 @@
           - docker_daemon_configuration.content | b64decode | from_json == docker_daemon_options
           - ansible_facts.services['docker.service'].state == 'running'
           - ansible_facts.services['unattended-upgrades.service'].state == 'running'
-          - ansible_facts.services['loresuelvo-docker-firewall.service'].state == 'running'
+          - active_services.results | map(attribute='stdout') | unique | list == ['active']
 
     - name: Verify root directories
       ansible.builtin.assert:
