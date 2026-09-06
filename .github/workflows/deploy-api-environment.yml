@@ -58,7 +58,7 @@ jobs:
           include-imports: false
           recursive: false
           export-type: file
-          file-output-path: /.deployment-secrets/api.env
+          file-output-path: .deployment-secrets/api.env
 
       - name: Deploy sequentially
         env:
