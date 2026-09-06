@@ -28,7 +28,15 @@ override.tf.json
 # Local environment files
 .env
 .deployment-secrets/
+**/api.env
 .venv/
+
+# Private keys and TLS certificates
+*.key
+*.pem
+*.crt
+id_rsa
+id_ed25519
 
 # Local Ansible inventories, keys, and retry artifacts
 ansible/inventories/*/hosts.yml
