@@ -87,6 +87,12 @@
       loop: "{{ application_root_directories }}"
       register: application_directories
 
+    - name: Inspect application deployment directories
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+      loop: "{{ application_deploy_directories }}"
+      register: application_deploy_directory_stats
+
     - name: Read UFW status
       ansible.builtin.command: ufw status
       register: ufw_status
@@ -152,6 +158,17 @@
       loop: "{{ application_directories.results }}"
       loop_control:
         label: "{{ item.item }}"
+
+    - name: Verify application deployment directories
+      ansible.builtin.assert:
+        that:
+          - item.stat.isdir
+          - item.stat.pw_name == application_deploy_directory_owner
+          - item.stat.gr_name == application_deploy_directory_group
+          - item.stat.mode == item.item.mode
+      loop: "{{ application_deploy_directory_stats.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
 
     - name: Verify firewall, updates, and markers
       ansible.builtin.assert:

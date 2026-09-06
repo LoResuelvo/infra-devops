@@ -1,0 +1,11 @@
+---
+- name: Create application deployment directory
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ application_deploy_directory_owner }}"
+    group: "{{ application_deploy_directory_group }}"
+    mode: "{{ item.mode }}"
+  loop: "{{ application_deploy_directories }}"
+  loop_control:
+    label: "{{ item.path }}"

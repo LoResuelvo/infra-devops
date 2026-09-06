@@ -11,6 +11,9 @@
     password_lock: true
     state: present
 
+- name: Create application deployment directories
+  ansible.builtin.include_tasks: deployment-directories.yml
+
 - name: Create deployment SSH directory
   ansible.builtin.file:
     path: /home/deploy/.ssh

@@ -59,13 +59,16 @@ necesita Python y SSH. `ansible/requirements.yml` fija
 - `docker`: repositorio oficial, Docker CE/CLI `29.7.2`, containerd `2.3.3`,
   Buildx `0.36.1`, Compose `5.4.0`, paquetes en hold, rotación de logs y
   `live-restore`;
-- `deploy_user`: usuario sin contraseña, claves requeridas, grupo `docker` y
-  ampliación de `AllowUsers` a `ubuntu deploy`;
+- `deploy_user`: usuario sin contraseña, claves requeridas, grupo `docker`,
+  directorios de API/gateway con permisos restrictivos y ampliación de
+  `AllowUsers` a `ubuntu deploy`;
 - `firewall`: UFW 22/80/443 y política persistente de `DOCKER-USER` que admite
   conexiones establecidas y tráfico web y descarta el resto.
 
-Ansible crea `app-network`, pero no subdirectorios de API o webapp. Las claves
-solo se suministran desde `ansible/vars/deploy-keys.yml`, que está ignorado.
+Ansible crea `app-network`, `/opt/loresuelvo/{api,gateway}` con modo `0750` y
+los directorios privados `/etc/loresuelvo/api` y
+`/etc/loresuelvo/gateway/tls` con modo `0700`. Las claves solo se suministran
+desde `ansible/vars/deploy-keys.yml`, que está ignorado.
 
 ## Validación
 
@@ -77,7 +80,8 @@ estables, inventario y cloud-init YAML válido con SSH/Python/UFW y sin Docker n
 En una réplica configurada, `verify-application-nodes.yml` comprueba usuarios y
 claves, SSH, paquetes y holds de Docker, daemon, Compose, `app-network`,
 servicios, directorios raíz, UFW, `DOCKER-USER`, actualizaciones y marcas. El
-script `ansible/tests/check-idempotence.sh` ejecuta dos pasadas y exige
+playbook también verifica propietario y modo de cada directorio de despliegue.
+El script `ansible/tests/check-idempotence.sh` ejecuta dos pasadas y exige
 `changed=0`, `unreachable=0` y `failed=0` en la segunda.
 
 Los tests locales no crean recursos ni acceden a OVH. Una prueba real debe usar

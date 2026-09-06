@@ -49,8 +49,8 @@ locking.
 Cloud-init solo deja Ubuntu administrable como `ubuntu`: actualización inicial,
 Python, sudo, UFW con SSH y autenticación SSH por clave. Ansible crea `deploy`,
 instala las versiones fijadas de Docker, configura firewall, actualizaciones y
-los directorios raíz `/opt/loresuelvo` y `/etc/loresuelvo`. Los deployments de
-API y webapp crearán sus propios subdirectorios posteriormente.
+los directorios raíz `/opt/loresuelvo` y `/etc/loresuelvo`. También prepara
+como `deploy` los directorios operativos y privados de la API y el gateway.
 
 Ansible se instala únicamente en el equipo controlador:
 
