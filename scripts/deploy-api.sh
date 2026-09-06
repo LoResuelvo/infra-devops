@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 5 ]]; then
-  echo "usage: $0 ENVIRONMENT HOSTS IMAGE_REF RELEASE_TAG CONFIG_FILE" >&2
+if [[ $# -ne 6 ]]; then
+  echo "usage: $0 ENVIRONMENT HOSTS IMAGE_REF RELEASE_TAG CONFIG_FILE SECRETS_FILE" >&2
   exit 2
 fi
 
@@ -11,6 +11,7 @@ hosts_input=$2
 image_ref=$3
 release_tag=$4
 config_file=$5
+app_secrets_file=$6
 script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 api_compose="$script_root/deploy/api/compose.yml"
 gateway_compose="$script_root/deploy/gateway/compose.yml"
@@ -32,7 +33,8 @@ require_env() {
   fail "Release tag must have vX.Y.Z format."
 [[ "$image_ref" =~ ^ghcr\.io/loresuelvo/api@sha256:[a-f0-9]{64}$ ]] || \
   fail "Image reference is invalid."
-[[ -f "$config_file" && -f "$api_compose" && -f "$gateway_compose" && -f "$nginx_config" ]] || \
+[[ -f "$config_file" && -s "$app_secrets_file" && -f "$api_compose" && \
+  -f "$gateway_compose" && -f "$nginx_config" ]] || \
   fail "A deployment artifact is missing."
 grep -qx "ENVIRONMENT=$environment" "$config_file" || \
   fail "Configuration does not match environment."
@@ -44,30 +46,20 @@ require_env CLOUDFLARE_ORIGIN_CERT
 require_env CLOUDFLARE_ORIGIN_KEY
 [[ "$GHCR_USER" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || fail "GHCR_USER is invalid."
 
-secret_names=(
-  AUTH0_DOMAIN
-  AUTH0_AUDIENCE
-  DATABASE_URL
-  STORAGE_ACCESS_KEY_ID
-  STORAGE_SECRET_ACCESS_KEY
-  CHATBOT_API_KEY
-  GOOGLE_MAPS_API_KEY
-  MERCADO_PAGO_CLIENT_ID
-  MERCADO_PAGO_CLIENT_SECRET
-  PAYMENT_ACCOUNT_CREDENTIAL_ENCRYPTION_KEY
-  MERCADO_PAGO_WEBHOOK_SECRET
-  GOOGLE_CALENDAR_CLIENT_ID
-  GOOGLE_CALENDAR_CLIENT_SECRET
-  GOOGLE_CALENDAR_CREDENTIAL_ENCRYPTION_KEY
-  DIDIT_API_KEY
-  DIDIT_WORKFLOW_ID
-  DIDIT_HTTP_TIMEOUT
-  DIDIT_WEBHOOK_SECRET
-)
+awk '
+  /^[A-Z][A-Z0-9_]*='\''[^'\'']+'\''$/ { found = 1; next }
+  { exit 1 }
+  END { if (!found) exit 1 }
+' "$app_secrets_file" || fail "Application secrets file is invalid."
+grep -q "^DATABASE_URL=" "$app_secrets_file" || fail "DATABASE_URL is missing."
+! grep -Eq '^(DEPLOY_HOSTS|DEPLOY_SSH_PRIVATE_KEY|GHCR_USER|GHCR_TOKEN|CLOUDFLARE_ORIGIN_(CERT|KEY))=' \
+  "$app_secrets_file" || fail "Deployment credentials found in application secrets."
 
-for name in "${secret_names[@]}"; do
-  require_env "$name"
-done
+awk -F= '
+  /^[A-Z][A-Z0-9_]*=/ {
+    if (seen[$1]++) exit 1
+  }
+' "$config_file" "$app_secrets_file" || fail "Duplicate application configuration key."
 
 normalized_hosts=${hosts_input//,/ }
 normalized_hosts=${normalized_hosts//$'\n'/ }
@@ -96,14 +88,11 @@ printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$ssh_key"
 printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$origin_cert"
 printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$origin_key"
 cp "$config_file" "$api_env"
-
-for name in "${secret_names[@]}"; do
-  value=${!name}
-  [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] || \
-    fail "$name must be a single-line value."
-  ! grep -Eq "^${name}=" "$api_env" || fail "$name is duplicated in the configuration."
-  printf '%s=%s\n' "$name" "$value" >> "$api_env"
-done
+{
+  printf '\n'
+  cat "$app_secrets_file"
+  printf '\n'
+} >> "$api_env"
 
 ssh_options=(
   -i "$ssh_key"

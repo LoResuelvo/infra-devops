@@ -27,6 +27,7 @@ override.tf.json
 
 # Local environment files
 .env
+.deployment-secrets/
 .venv/
 
 # Local Ansible inventories, keys, and retry artifacts

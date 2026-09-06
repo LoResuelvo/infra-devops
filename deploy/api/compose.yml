@@ -2,8 +2,7 @@ services:
   api:
     image: ${IMAGE_REF:?IMAGE_REF is required}
     env_file:
-      - path: /etc/loresuelvo/api/api.env
-        format: raw
+      - /etc/loresuelvo/api/api.env
     ports:
       - "127.0.0.1:8080:8080"
     restart: unless-stopped
@@ -15,8 +14,7 @@ services:
     profiles:
       - tools
     env_file:
-      - path: /etc/loresuelvo/api/api.env
-        format: raw
+      - /etc/loresuelvo/api/api.env
     entrypoint: ["/bin/sh", "-ec"]
     command: ['exec /usr/local/bin/migrate -path /migrations -database "$$DATABASE_URL" up']
     networks:
