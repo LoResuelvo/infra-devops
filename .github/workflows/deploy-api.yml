@@ -1,0 +1,65 @@
+name: Deploy API
+
+on:
+  workflow_call:
+    inputs:
+      image-ref:
+        type: string
+        required: true
+      release-tag:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment code
+        uses: actions/checkout@v6
+        with:
+          repository: LoResuelvo/infra-devops
+          ref: main
+
+      - name: Validate caller and immutable release inputs
+        env:
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CALLER_REF_TYPE: ${{ github.ref_type }}
+          CALLER_TAG: ${{ github.ref_name }}
+          IMAGE_REF: ${{ inputs.image-ref }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          scripts/validate-api-deployment-inputs.sh \
+            "$CALLER_REPOSITORY" "$CALLER_REF_TYPE" "$CALLER_TAG" \
+            "$IMAGE_REF" "$RELEASE_TAG"
+
+  deploy-staging:
+    needs: validate-inputs
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout deployment code
+        uses: actions/checkout@v6
+        with:
+          repository: LoResuelvo/infra-devops
+          ref: main
+
+      - name: Fetch staging secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: staging
+          secret-path: /api
+
+      - name: Deploy staging sequentially
+        env:
+          IMAGE_REF: ${{ inputs.image-ref }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          scripts/deploy-api.sh staging "$DEPLOY_HOSTS" \
+            "$IMAGE_REF" "$RELEASE_TAG" config/staging.conf
