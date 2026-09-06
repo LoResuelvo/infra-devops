@@ -41,5 +41,7 @@ id_ed25519
 # Local Ansible inventories, keys, and retry artifacts
 ansible/inventories/*/hosts.yml
 ansible/vars/deploy-keys.yml
+ansible/vars/deploy-keys-staging.yml
+ansible/vars/deploy-keys-production.yml
 ansible/collections/
 *.retry

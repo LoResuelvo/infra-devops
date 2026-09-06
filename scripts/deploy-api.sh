@@ -15,7 +15,7 @@ app_secrets_file=$6
 script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 api_compose="$script_root/deploy/api/compose.yml"
 gateway_compose="$script_root/deploy/gateway/compose.yml"
-nginx_config="$script_root/deploy/gateway/nginx/default.conf"
+nginx_template="$script_root/deploy/gateway/nginx/default.conf.template"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -34,7 +34,7 @@ require_env() {
 [[ "$image_ref" =~ ^ghcr\.io/loresuelvo/api@sha256:[a-f0-9]{64}$ ]] || \
   fail "Image reference is invalid."
 [[ -f "$config_file" && -s "$app_secrets_file" && -f "$api_compose" && \
-  -f "$gateway_compose" && -f "$nginx_config" ]] || \
+  -f "$gateway_compose" && -f "$nginx_template" ]] || \
   fail "A deployment artifact is missing."
 grep -qx "ENVIRONMENT=$environment" "$config_file" || \
   fail "Configuration does not match environment."
@@ -79,10 +79,31 @@ done
 work_dir=$(mktemp -d)
 ssh_key="$work_dir/deploy_key"
 api_env="$work_dir/api.env"
+nginx_config="$work_dir/default.conf"
 origin_cert="$work_dir/origin.crt"
 origin_key="$work_dir/origin.key"
 trap 'rm -rf "$work_dir"' EXIT
 umask 077
+
+case "$environment" in
+  staging)
+    api_server_names="api-test.loresuelvo.com.ar"
+    web_server_names="test.loresuelvo.com.ar"
+    admin_server_names="gestion-test.loresuelvo.com.ar"
+    ;;
+  production)
+    api_server_names="api.loresuelvo.com.ar"
+    web_server_names="loresuelvo.com.ar www.loresuelvo.com.ar"
+    admin_server_names="gestion.loresuelvo.com.ar"
+    ;;
+esac
+
+sed \
+  -e "s/__API_SERVER_NAMES__/$api_server_names/g" \
+  -e "s/__WEB_SERVER_NAMES__/$web_server_names/g" \
+  -e "s/__ADMIN_SERVER_NAMES__/$admin_server_names/g" \
+  "$nginx_template" > "$nginx_config"
+! grep -q '__[A-Z_]*__' "$nginx_config" || fail "Gateway template is incomplete."
 
 printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$ssh_key"
 printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$origin_cert"

@@ -68,7 +68,9 @@ necesita Python y SSH. `ansible/requirements.yml` fija
 Ansible crea `app-network`, `/opt/loresuelvo/{api,gateway}` con modo `0750` y
 los directorios privados `/etc/loresuelvo/api` y
 `/etc/loresuelvo/gateway/tls` con modo `0700`. Las claves solo se suministran
-desde `ansible/vars/deploy-keys.yml`, que está ignorado.
+desde `ansible/vars/deploy-keys-staging.yml` o
+`ansible/vars/deploy-keys-production.yml`, ambos ignorados. El mismo playbook y
+roles se usan para los dos ambientes; solo cambia la clave pública suministrada.
 
 ## Validación
 

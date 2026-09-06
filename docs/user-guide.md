@@ -37,17 +37,19 @@ source .venv/bin/activate
 python -m pip install -r ansible/requirements-dev.txt
 ansible-galaxy collection install -r ansible/requirements.yml
 cp ansible/inventories/test/hosts.example.yml ansible/inventories/test/hosts.yml
-cp ansible/vars/deploy-keys.example.yml ansible/vars/deploy-keys.yml
+cp ansible/vars/deploy-keys.example.yml ansible/vars/deploy-keys-staging.yml
+cp ansible/vars/deploy-keys.example.yml ansible/vars/deploy-keys-production.yml
 ```
 
-Reemplazar la IP ficticia y la clave pública. Para una clave privada con nombre
+Reemplazar las IP ficticias y cada clave pública con la clave de deployment de
+su ambiente. Para una clave privada administrativa con nombre
 no estándar, agregar `ansible_ssh_private_key_file` solo al inventario ignorado.
 Validar los archivos antes de conectarse:
 
 ```bash
 ansible-inventory -i ansible/inventories/test/hosts.yml --graph
 ansible-playbook -i ansible/inventories/test/hosts.yml \
-  -e @ansible/vars/deploy-keys.yml \
+  -e @ansible/vars/deploy-keys-staging.yml \
   ansible/playbooks/configure-application-nodes.yml --syntax-check
 ansible-lint ansible/playbooks ansible/roles
 ```
@@ -61,12 +63,12 @@ actualización inicial es posible.
 ssh ubuntu@IP_DE_LA_REPLICA cloud-init status --wait
 
 ansible-playbook -i ansible/inventories/test/hosts.yml \
-  -e @ansible/vars/deploy-keys.yml \
+  -e @ansible/vars/deploy-keys-staging.yml \
   --limit test-ansible-validation-01 \
   ansible/playbooks/configure-application-nodes.yml
 
 ansible-playbook -i ansible/inventories/test/hosts.yml \
-  -e @ansible/vars/deploy-keys.yml \
+  -e @ansible/vars/deploy-keys-staging.yml \
   --limit test-ansible-validation-01 \
   ansible/playbooks/verify-application-nodes.yml
 ```
@@ -77,7 +79,7 @@ Para ejecutar dos pasadas de configuración y exigir idempotencia en la segunda:
 ansible/tests/check-idempotence.sh \
   ansible/inventories/test/hosts.yml \
   test-ansible-validation-01 \
-  ansible/vars/deploy-keys.yml
+  ansible/vars/deploy-keys-staging.yml
 ```
 
 ## Prueba temporal en OVH
@@ -108,7 +110,8 @@ Nunca agregar a Git:
 *openrc*
 terraform.tfvars
 ansible/inventories/*/hosts.yml
-ansible/vars/deploy-keys.yml
+ansible/vars/deploy-keys-staging.yml
+ansible/vars/deploy-keys-production.yml
 claves privadas SSH
 *.tfstate
 *.tfstate.*
