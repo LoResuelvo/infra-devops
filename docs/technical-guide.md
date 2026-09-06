@@ -55,7 +55,8 @@ necesita Python y SSH. `ansible/requirements.yml` fija
 `community.general 13.3.0` y `community.docker 5.2.2`. Los roles aplican:
 
 - `base_node`: paquetes base, actualizaciones de seguridad sin reboot,
-  `/opt/loresuelvo`, `/etc/loresuelvo` y marca de configuración;
+  `/opt/loresuelvo`, `/etc/loresuelvo` y normalización de las marcas de
+  bootstrap y configuración, incluso en instancias fijas reinstaladas;
 - `docker`: repositorio oficial, Docker CE/CLI `29.7.2`, containerd `2.3.3`,
   Buildx `0.36.1`, Compose `5.4.0`, paquetes en hold, rotación de logs y
   `live-restore`;

@@ -21,6 +21,14 @@
     mode: "0755"
   loop: "{{ application_root_directories }}"
 
+- name: Normalize node bootstrap marker
+  ansible.builtin.copy:
+    dest: /etc/loresuelvo/bootstrap-version
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ loresuelvo_bootstrap_version }}\n"
+
 - name: Configure unattended security updates without automatic reboot
   ansible.builtin.copy:
     dest: /etc/apt/apt.conf.d/52loresuelvo-unattended-upgrades
