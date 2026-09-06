@@ -20,8 +20,8 @@ jobs:
         uses: Infisical/secrets-action@v1.0.16
         with:
           method: "oidc"
-          identity-id: "TU_ID_REAL"
-          project-slug: "TU_SLUG_REAL"
+          identity-id: "cc123a18-b15c-4ac4-9027-35e66af9c972"
+          project-slug: "lo-resuelvo-7j-te"
           env-slug: "staging"
 
       - name: Success
