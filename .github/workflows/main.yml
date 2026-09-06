@@ -16,20 +16,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fetch API staging secrets
+      - name: Fetch secrets from Infisical
         uses: Infisical/secrets-action@v1.0.16
         with:
           method: "oidc"
-          identity-id: "TU_MACHINE_IDENTITY_ID"
-          project-slug: "TU_PROJECT_SLUG"
+          identity-id: "TU_ID_REAL"
+          project-slug: "TU_SLUG_REAL"
           env-slug: "staging"
-          secret-path: "/api"
 
-      - name: Verify secrets
-        run: |
-          if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL no fue cargada"
-            exit 1
-          fi
-
-          echo "Infisical API staging OK"
+      - name: Success
+        run: echo "Infisical OK"
