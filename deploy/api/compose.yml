@@ -1,0 +1,24 @@
+services:
+  api:
+    image: ${IMAGE_REF:?IMAGE_REF is required}
+    env_file:
+      - /etc/loresuelvo/api/api.env
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  migrate:
+    image: ${IMAGE_REF:?IMAGE_REF is required}
+    profiles:
+      - tools
+    env_file:
+      - /etc/loresuelvo/api/api.env
+    entrypoint: ["/usr/local/bin/migrate"]
+    command: ["-path", "/migrations", "-database", "${DATABASE_URL:?DATABASE_URL is required}", "up"]
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    name: app-network
+    external: true

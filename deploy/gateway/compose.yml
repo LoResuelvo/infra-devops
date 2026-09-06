@@ -1,0 +1,18 @@
+services:
+  gateway:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d:ro
+      - /etc/loresuelvo/gateway/tls:/etc/loresuelvo/gateway/tls:ro
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    name: app-network
+    external: true
