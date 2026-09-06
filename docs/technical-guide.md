@@ -64,7 +64,8 @@ necesita Python y SSH. `ansible/requirements.yml` fija
   directorios de API/gateway con permisos restrictivos y ampliación de
   `AllowUsers` a `ubuntu deploy`;
 - `firewall`: UFW 22/80/443 y política persistente de `DOCKER-USER` que admite
-  conexiones establecidas y tráfico web y descarta el resto.
+  conexiones iniciadas por los bridges Docker, respuestas establecidas y
+  tráfico web entrante, y descarta el resto.
 
 Ansible crea `app-network`, `/opt/loresuelvo/{api,gateway}` con modo `0750` y
 los directorios privados `/etc/loresuelvo/api` y

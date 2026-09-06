@@ -1,6 +1,6 @@
 ---
 loresuelvo_bootstrap_version: "2026-09-04.1"
-loresuelvo_configuration_version: "2026-09-06.1"
+loresuelvo_configuration_version: "2026-09-06.2"
 
 docker_apt_versions:
   docker-ce: "5:29.7.2-1~ubuntu.24.04~noble"

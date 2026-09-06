@@ -103,6 +103,8 @@
         argv: "{{ item }}"
       loop:
         - [iptables, -C, DOCKER-USER, -m, conntrack, --ctstate, "RELATED,ESTABLISHED", -j, ACCEPT]
+        - [iptables, -C, DOCKER-USER, -i, docker0, -j, ACCEPT]
+        - [iptables, -C, DOCKER-USER, -i, "br+", -j, ACCEPT]
         - [iptables, -C, DOCKER-USER, -p, tcp, -m, multiport, --dports, "80,443", -j, ACCEPT]
         - [iptables, -C, DOCKER-USER, -j, DROP]
       changed_when: false

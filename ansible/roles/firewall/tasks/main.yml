@@ -34,6 +34,8 @@
       }
       add_rule -j DROP
       add_rule -p tcp -m multiport --dports 80,443 -j ACCEPT
+      add_rule -i docker0 -j ACCEPT
+      add_rule -i br+ -j ACCEPT
       add_rule -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
   notify: Restart Docker firewall
 
