@@ -75,3 +75,8 @@ jobs:
       - name: Remove application secrets file
         if: always()
         run: rm -f .deployment-secrets/api.env
+
+      - name: Smoke test deployed API
+        env:
+          DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+        run: scripts/smoke-test-api.sh "$DEPLOY_ENVIRONMENT"
