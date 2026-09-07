@@ -1,6 +1,6 @@
 ---
 loresuelvo_bootstrap_version: "2026-09-04.1"
-loresuelvo_configuration_version: "2026-09-06.2"
+loresuelvo_configuration_version: "2026-09-07.1"
 
 docker_apt_versions:
   docker-ce: "5:29.7.2-1~ubuntu.24.04~noble"
@@ -27,9 +27,13 @@ application_deploy_directories:
     mode: "0750"
   - path: /opt/loresuelvo/gateway
     mode: "0750"
+  - path: /opt/loresuelvo/webapp
+    mode: "0750"
   - path: /etc/loresuelvo/api
     mode: "0700"
   - path: /etc/loresuelvo/gateway/tls
+    mode: "0700"
+  - path: /etc/loresuelvo/webapp
     mode: "0700"
 
 application_ingress_tcp_ports:

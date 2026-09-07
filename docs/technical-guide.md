@@ -61,16 +61,16 @@ necesita Python y SSH. `ansible/requirements.yml` fija
   Buildx `0.36.1`, Compose `5.4.0`, paquetes en hold, rotación de logs y
   `live-restore`;
 - `deploy_user`: usuario sin contraseña, claves requeridas, grupo `docker`,
-  directorios de API/gateway con permisos restrictivos y ampliación de
+  directorios de API/Web App/gateway con permisos restrictivos y ampliación de
   `AllowUsers` a `ubuntu deploy`;
 - `firewall`: UFW 22/80/443 y política persistente de `DOCKER-USER` que admite
   conexiones iniciadas por los bridges Docker, respuestas establecidas y
   tráfico web entrante, y descarta el resto.
 
-Ansible crea `app-network`, `/opt/loresuelvo/{api,gateway}` con modo `0750` y
-los directorios privados `/etc/loresuelvo/api` y
-`/etc/loresuelvo/gateway/tls` con modo `0700`. Las claves solo se suministran
-desde `ansible/vars/deploy-keys-staging.yml` o
+Ansible crea `app-network`, `/opt/loresuelvo/{api,gateway,webapp}` con modo
+`0750` y los directorios privados `/etc/loresuelvo/api`,
+`/etc/loresuelvo/gateway/tls` y `/etc/loresuelvo/webapp` con modo `0700`. Las
+claves solo se suministran desde `ansible/vars/deploy-keys-staging.yml` o
 `ansible/vars/deploy-keys-production.yml`, ambos ignorados. El mismo playbook y
 roles se usan para los dos ambientes; solo cambia la clave pública suministrada.
 
