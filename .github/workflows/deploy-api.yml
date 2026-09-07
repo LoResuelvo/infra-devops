@@ -41,7 +41,7 @@ jobs:
     uses: ./.github/workflows/deploy-api-environment.yml
     with:
       environment: staging
-      config-file: config/staging.conf
+      config-file: deploy/api/config/staging.conf
       image-ref: ${{ inputs.image-ref }}
       release-tag: ${{ inputs.release-tag }}
 
@@ -50,6 +50,6 @@ jobs:
     uses: ./.github/workflows/deploy-api-environment.yml
     with:
       environment: production
-      config-file: config/prod.conf
+      config-file: deploy/api/config/prod.conf
       image-ref: ${{ inputs.image-ref }}
       release-tag: ${{ inputs.release-tag }}

@@ -1,0 +1,25 @@
+services:
+  loresuelvo:
+    image: ${IMAGE_REF:?IMAGE_REF is required}
+    env_file:
+      - /etc/loresuelvo/webapp/webapp.env
+    expose:
+      - "3000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000').then(response=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    name: app-network
+    external: true
