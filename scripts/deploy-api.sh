@@ -14,8 +14,6 @@ config_file=$5
 app_secrets_file=$6
 script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 api_compose="$script_root/deploy/api/compose.yml"
-gateway_compose="$script_root/deploy/gateway/compose.yml"
-nginx_template="$script_root/deploy/gateway/nginx/default.conf.template"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -33,8 +31,7 @@ require_env() {
   fail "Release tag must have vX.Y.Z format."
 [[ "$image_ref" =~ ^ghcr\.io/loresuelvo/api@sha256:[a-f0-9]{64}$ ]] || \
   fail "Image reference is invalid."
-[[ -f "$config_file" && -s "$app_secrets_file" && -f "$api_compose" && \
-  -f "$gateway_compose" && -f "$nginx_template" ]] || \
+[[ -f "$config_file" && -s "$app_secrets_file" && -f "$api_compose" ]] || \
   fail "A deployment artifact is missing."
 grep -qx "ENVIRONMENT=$environment" "$config_file" || \
   fail "Configuration does not match environment."
@@ -42,8 +39,6 @@ grep -qx "ENVIRONMENT=$environment" "$config_file" || \
 require_env DEPLOY_SSH_PRIVATE_KEY
 require_env GHCR_USER
 require_env GHCR_TOKEN
-require_env CLOUDFLARE_ORIGIN_CERT
-require_env CLOUDFLARE_ORIGIN_KEY
 [[ "$GHCR_USER" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || fail "GHCR_USER is invalid."
 
 awk '
@@ -79,35 +74,10 @@ done
 work_dir=$(mktemp -d)
 ssh_key="$work_dir/deploy_key"
 api_env="$work_dir/api.env"
-nginx_config="$work_dir/default.conf"
-origin_cert="$work_dir/origin.crt"
-origin_key="$work_dir/origin.key"
 trap 'rm -rf "$work_dir"' EXIT
 umask 077
 
-case "$environment" in
-  staging)
-    api_server_names="api-test.loresuelvo.com.ar"
-    web_server_names="test.loresuelvo.com.ar"
-    admin_server_names="gestion-test.loresuelvo.com.ar"
-    ;;
-  production)
-    api_server_names="api.loresuelvo.com.ar"
-    web_server_names="loresuelvo.com.ar www.loresuelvo.com.ar"
-    admin_server_names="gestion.loresuelvo.com.ar"
-    ;;
-esac
-
-sed \
-  -e "s/__API_SERVER_NAMES__/$api_server_names/g" \
-  -e "s/__WEB_SERVER_NAMES__/$web_server_names/g" \
-  -e "s/__ADMIN_SERVER_NAMES__/$admin_server_names/g" \
-  "$nginx_template" > "$nginx_config"
-! grep -q '__[A-Z_]*__' "$nginx_config" || fail "Gateway template is incomplete."
-
 printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$ssh_key"
-printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$origin_cert"
-printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$origin_key"
 cp "$config_file" "$api_env"
 {
   printf '\n'
@@ -126,25 +96,13 @@ ssh_options=(
 for host in "${hosts[@]}"; do
   remote="deploy@$host"
   echo "Preparing $environment node"
-  ssh "${ssh_options[@]}" "$remote" \
-    'mkdir -p /opt/loresuelvo/gateway/nginx && chmod 0750 /opt/loresuelvo/gateway/nginx'
   scp "${ssh_options[@]}" "$api_env" "$remote:/etc/loresuelvo/api/api.env.next"
   scp "${ssh_options[@]}" "$api_compose" "$remote:/opt/loresuelvo/api/compose.yml.next"
-  scp "${ssh_options[@]}" "$gateway_compose" "$remote:/opt/loresuelvo/gateway/compose.yml.next"
-  scp "${ssh_options[@]}" "$nginx_config" "$remote:/opt/loresuelvo/gateway/nginx/default.conf.next"
-  scp "${ssh_options[@]}" "$origin_cert" "$remote:/etc/loresuelvo/gateway/tls/origin.crt.next"
-  scp "${ssh_options[@]}" "$origin_key" "$remote:/etc/loresuelvo/gateway/tls/origin.key.next"
 
   ssh "${ssh_options[@]}" "$remote" 'bash -se' <<'REMOTE'
 install -m 0600 /etc/loresuelvo/api/api.env.next /etc/loresuelvo/api/api.env
 install -m 0640 /opt/loresuelvo/api/compose.yml.next /opt/loresuelvo/api/compose.yml
-install -m 0640 /opt/loresuelvo/gateway/compose.yml.next /opt/loresuelvo/gateway/compose.yml
-install -m 0640 /opt/loresuelvo/gateway/nginx/default.conf.next /opt/loresuelvo/gateway/nginx/default.conf
-install -m 0640 /etc/loresuelvo/gateway/tls/origin.crt.next /etc/loresuelvo/gateway/tls/origin.crt
-install -m 0600 /etc/loresuelvo/gateway/tls/origin.key.next /etc/loresuelvo/gateway/tls/origin.key
 rm -f /etc/loresuelvo/api/api.env.next /opt/loresuelvo/api/compose.yml.next
-rm -f /opt/loresuelvo/gateway/compose.yml.next /opt/loresuelvo/gateway/nginx/default.conf.next
-rm -f /etc/loresuelvo/gateway/tls/origin.crt.next /etc/loresuelvo/gateway/tls/origin.key.next
 REMOTE
 
   printf '%s' "$GHCR_TOKEN" | ssh "${ssh_options[@]}" "$remote" \
@@ -152,7 +110,6 @@ REMOTE
   ssh "${ssh_options[@]}" "$remote" bash -se -- "$image_ref" <<'REMOTE'
 export IMAGE_REF=$1
 docker compose -f /opt/loresuelvo/api/compose.yml pull api migrate
-docker compose -f /opt/loresuelvo/gateway/compose.yml pull gateway
 REMOTE
 done
 
@@ -167,8 +124,6 @@ for host in "${hosts[@]}"; do
   ssh "${ssh_options[@]}" "deploy@$host" bash -se -- "$image_ref" <<'REMOTE'
 export IMAGE_REF=$1
 docker compose -f /opt/loresuelvo/api/compose.yml up -d --no-deps api
-docker compose -f /opt/loresuelvo/gateway/compose.yml run --rm --no-deps gateway nginx -t
-docker compose -f /opt/loresuelvo/gateway/compose.yml up -d --no-deps gateway
 for attempt in $(seq 1 30); do
   if curl --fail --silent --show-error http://127.0.0.1:8080/health/ready >/dev/null; then
     exit 0
