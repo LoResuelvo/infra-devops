@@ -104,7 +104,8 @@ install -m 0600 /etc/loresuelvo/gateway/tls/origin.key.next /etc/loresuelvo/gate
 rm -f /opt/loresuelvo/gateway/compose.yml.next /opt/loresuelvo/gateway/nginx/default.conf.next
 rm -f /etc/loresuelvo/gateway/tls/origin.crt.next /etc/loresuelvo/gateway/tls/origin.key.next
 docker compose -f /opt/loresuelvo/gateway/compose.yml pull gateway
-docker compose -f /opt/loresuelvo/gateway/compose.yml run --rm --no-deps gateway nginx -t
+docker compose -f /opt/loresuelvo/gateway/compose.yml run \
+  --rm --no-deps --no-tty --interactive=false gateway nginx -t </dev/null
 docker compose -f /opt/loresuelvo/gateway/compose.yml up -d --no-deps --force-recreate gateway
 docker inspect nginx-proxy --format '{{.State.Running}}' | grep -qx true
 docker compose -f /opt/loresuelvo/gateway/compose.yml ps gateway
