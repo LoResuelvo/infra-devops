@@ -4,7 +4,7 @@
 
 | Capa | Responsabilidad |
 |---|---|
-| Roots Terraform | Deciden cuántas réplicas existen en test y producción. |
+| Roots Terraform | Deciden cuántas réplicas existen en staging y producción. |
 | `application-node` | Crea keypair, VM, red y entrega `user_data`. |
 | Cloud-init | Deja Ubuntu accesible como `ubuntu` con Python, sudo y SSH seguro. |
 | Ansible | Configura usuario, Docker, firewall, actualizaciones y nodo. |
@@ -12,31 +12,33 @@
 
 ## Topología y lifecycle
 
-`terraform/environments/test/replicas` y
+`terraform/environments/staging/replicas` y
 `terraform/environments/production/replicas` son roots independientes. Cada
-uno mantiene su propia configuración, directorio de trabajo y state local.
+uno mantiene su propia configuración, directorio de trabajo y state remoto.
 
 ```text
 primary_instance (input, no administrado) ─┐
                                            ├─ deployment_hosts
-replicas (map for_each) ─ módulo ─ VMs ────┘
+replica_count ─ mapa derivado/for_each ─ módulo ─ VMs ────┘
 ```
 
 `primary_instance` contiene solo nombre e IPv4 y no alimenta recursos. El mapa
-`replicas` usa sus claves como identidades estables; el default `{}` crea cero
-recursos. El módulo registra únicamente la clave pública operativa, busca la
-imagen y crea la VM conectada a la red indicada.
+`replica_count` genera claves deterministas terminadas en `-replica-NN`; el
+default cero crea cero recursos. El módulo registra la clave pública operativa,
+busca la imagen Ubuntu más reciente y crea la VM conectada a la red indicada.
+El lifecycle ignora cambios posteriores de `image_id`, por lo que una imagen
+nueva solo afecta nodos nuevos.
 
-Cada root recibe `environment`, `primary_instance`, `replicas`, región, imagen,
-flavor, red y `operator_ssh_public_key`. Los outputs exponen IDs e IPv4 por
-nombre, el mapa de réplicas y `deployment_hosts`, con la primaria de referencia
-seguida por las réplicas ordenadas.
+Cada root recibe `environment`, `primary_instance`, `replica_count`, región, imagen,
+flavor, red y `operator_ssh_public_key`. Los outputs exponen cantidad, nombres
+e IPv4 ordenados, y `deployment_hosts`, con la primaria de referencia seguida
+por las réplicas ordenadas.
 
 ## State y secretos
 
-Cada root usa state local e independiente. `*.tfstate`, `*.tfvars`, planes y
-`.terraform/` están ignorados. Antes de automatizar `apply` se necesita una
-migración explícita a un backend remoto cifrado, compartido y con locking.
+Cada root usa un backend S3 parcial, cifrado y con `use_lockfile`, sobre un
+bucket R2 privado por ambiente. `*.tfstate`, `*.tfvars`, planes y `.terraform/`
+están ignorados. Bucket, endpoint y credenciales se pasan al ejecutar `init`.
 Credenciales OpenStack, claves privadas, inventarios reales y claves de
 deployment nunca se declaran en archivos versionados.
 
@@ -100,5 +102,5 @@ El script `ansible/tests/check-idempotence.sh` ejecuta dos pasadas y exige
 `changed=0`, `unreachable=0` y `failed=0` en la segunda.
 
 Los tests locales no crean recursos ni acceden a OVH. Una prueba real debe usar
-exclusivamente una réplica temporal declarada en el mapa de test, con planes de
+exclusivamente una réplica temporal de staging, con planes de
 alta y baja revisados, y debe destruirla incluso si una validación falla.

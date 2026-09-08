@@ -3,6 +3,6 @@ all:
   children:
     application_nodes:
       hosts:
-        test-ansible-validation-01:
+        staging-replica-01:
           ansible_host: 192.0.2.31
           ansible_user: ubuntu

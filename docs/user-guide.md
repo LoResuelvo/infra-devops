@@ -1,20 +1,20 @@
 # Guía de usuario de Terraform y Ansible
 
-Los comandos se ejecutan desde la raíz del repositorio. `test` y `production`
-son roots distintos y nunca comparten state local.
+Los comandos se ejecutan desde la raíz del repositorio. `staging` y
+`production` son roots distintos y nunca comparten state.
 
 ## Preparar y validar Terraform
 
 Elegir un root y crear su archivo local:
 
 ```bash
-TF_ROOT=terraform/environments/test/replicas
+TF_ROOT=terraform/environments/staging/replicas
 # TF_ROOT=terraform/environments/production/replicas
 cp "$TF_ROOT/terraform.tfvars.example" "$TF_ROOT/terraform.tfvars"
 ```
 
 Completar la VM primaria de referencia, red, región, flavor, imagen y clave
-pública operativa. Mantener inicialmente `replicas = {}`. La primaria nunca se
+pública operativa. Mantener inicialmente `replica_count = 0`. La primaria nunca se
 importa ni administra desde estos roots.
 
 ```bash
@@ -27,6 +27,28 @@ terraform -chdir="$TF_ROOT" test
 Los tests usan OpenStack simulado y no crean recursos. Repetirlos en ambos
 roots cuando cambien el módulo o cloud-init.
 
+## Migración única del state local a R2
+
+Crear primero ambos buckets privados. Migrar staging antes que producción y
+usar una credencial de escritura del ambiente correspondiente:
+
+```bash
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_ENDPOINT_URL_S3=https://ACCOUNT_ID.r2.cloudflarestorage.com
+
+terraform -chdir="$TF_ROOT" init -migrate-state \
+  -backend-config="bucket=loresuelvo-terraform-state-staging"
+# Para el otro root, usar loresuelvo-terraform-state-production.
+terraform -chdir="$TF_ROOT" plan -detailed-exitcode
+```
+
+Confirmar que el plan termina con código 0 (sin cambios) antes de migrar el
+siguiente ambiente. Conservar el state local fuera del repositorio hasta
+validar la copia remota. Finalmente, iniciar dos operaciones simultáneas contra
+el mismo root y confirmar que una adquiere el lock y la otra espera o falla sin
+escribir. Nunca usar `-lock=false`.
+
 ## Preparar Ansible
 
 Ansible se instala solo en el controlador; la VM necesita Python y SSH:
@@ -36,7 +58,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r ansible/requirements-dev.txt
 ansible-galaxy collection install -r ansible/requirements.yml
-cp ansible/inventories/test/hosts.example.yml ansible/inventories/test/hosts.yml
+cp ansible/inventories/staging/hosts.example.yml ansible/inventories/staging/hosts.yml
 cp ansible/vars/deploy-keys.example.yml ansible/vars/deploy-keys-staging.yml
 cp ansible/vars/deploy-keys.example.yml ansible/vars/deploy-keys-production.yml
 ```
@@ -47,8 +69,8 @@ no estándar, agregar `ansible_ssh_private_key_file` solo al inventario ignorado
 Validar los archivos antes de conectarse:
 
 ```bash
-ansible-inventory -i ansible/inventories/test/hosts.yml --graph
-ansible-playbook -i ansible/inventories/test/hosts.yml \
+ansible-inventory -i ansible/inventories/staging/hosts.yml --graph
+ansible-playbook -i ansible/inventories/staging/hosts.yml \
   -e @ansible/vars/deploy-keys-staging.yml \
   ansible/playbooks/configure-application-nodes.yml --syntax-check
 ansible-lint ansible/playbooks ansible/roles
@@ -62,14 +84,14 @@ actualización inicial es posible.
 ```bash
 ssh ubuntu@IP_DE_LA_REPLICA cloud-init status --wait
 
-ansible-playbook -i ansible/inventories/test/hosts.yml \
+ansible-playbook -i ansible/inventories/staging/hosts.yml \
   -e @ansible/vars/deploy-keys-staging.yml \
-  --limit test-ansible-validation-01 \
+  --limit staging-replica-01 \
   ansible/playbooks/configure-application-nodes.yml
 
-ansible-playbook -i ansible/inventories/test/hosts.yml \
+ansible-playbook -i ansible/inventories/staging/hosts.yml \
   -e @ansible/vars/deploy-keys-staging.yml \
-  --limit test-ansible-validation-01 \
+  --limit staging-replica-01 \
   ansible/playbooks/verify-application-nodes.yml
 ```
 
@@ -77,8 +99,8 @@ Para ejecutar dos pasadas de configuración y exigir idempotencia en la segunda:
 
 ```bash
 ansible/tests/check-idempotence.sh \
-  ansible/inventories/test/hosts.yml \
-  test-ansible-validation-01 \
+  ansible/inventories/staging/hosts.yml \
+  staging-replica-01 \
   ansible/vars/deploy-keys-staging.yml
 ```
 
@@ -87,12 +109,11 @@ ansible/tests/check-idempotence.sh \
 Se requieren OpenRC y contraseña vigentes, clave privada operativa, cuota para
 una VM y keypair, `terraform.tfvars` real y claves de deployment reales.
 
-1. Declarar únicamente `test-ansible-validation-01` en `replicas` del root de
-   test.
+1. Establecer temporalmente `replica_count = 1` en el root de staging.
 2. Generar y revisar un plan que agregue solo esa VM y su keypair; aplicar
    manualmente.
-3. Ejecutar `scripts/configure-test-ansible-validation.sh`. El script obtiene la
-   única IP desde `replica_ipv4`, genera el inventario ignorado, espera
+3. Ejecutar el script de configuración para staging. El script obtiene el
+   host desde `deployment_hosts`, genera un inventario temporal, espera
    cloud-init/SSH, ejecuta dos pasadas y verifica `changed=0` en la segunda.
 4. Revisar el resultado del playbook de verificación.
 5. Quitar la réplica del mapa, revisar que el plan destruya solo la VM temporal

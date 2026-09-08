@@ -19,9 +19,9 @@ mock_provider "openstack" {
 }
 
 variables {
-  environment = "test"
+  environment = "staging"
   primary_instance = {
-    name = "test-primary-fixture"
+    name = "staging-primary-fixture"
     ipv4 = "192.0.2.10"
   }
   region                  = "BHS5"
@@ -35,18 +35,16 @@ run "rendered_cloud_init_policy" {
   command = plan
 
   variables {
-    replicas = {
-      "test-replica-fixture" = {}
-    }
+    replica_count = 1
   }
 
   assert {
-    condition     = can(yamldecode(module.replica["test-replica-fixture"].user_data))
+    condition     = can(yamldecode(module.replica["staging-replica-01"].user_data))
     error_message = "Rendered cloud-init must be valid YAML."
   }
 
   assert {
-    condition     = contains(yamldecode(module.replica["test-replica-fixture"].user_data).packages, "python3")
+    condition     = contains(yamldecode(module.replica["staging-replica-01"].user_data).packages, "python3")
     error_message = "Rendered cloud-init must install Python for Ansible."
   }
 
@@ -59,7 +57,7 @@ run "rendered_cloud_init_policy" {
         "PasswordAuthentication no",
         "ufw, allow, \"22/tcp\"",
         "/etc/loresuelvo/bootstrap-version",
-      ] : strcontains(module.replica["test-replica-fixture"].user_data, expected)
+      ] : strcontains(module.replica["staging-replica-01"].user_data, expected)
     ])
     error_message = "Rendered cloud-init must contain only the minimum access bootstrap."
   }
@@ -67,7 +65,7 @@ run "rendered_cloud_init_policy" {
   assert {
     condition = alltrue([
       for forbidden in ["docker", "deploy", "/opt/loresuelvo"] :
-      !strcontains(lower(module.replica["test-replica-fixture"].user_data), forbidden)
+      !strcontains(lower(module.replica["staging-replica-01"].user_data), forbidden)
     ])
     error_message = "Cloud-init must leave Docker, deploy, and application directories to Ansible."
   }
@@ -77,38 +75,53 @@ run "zero_replicas_by_default" {
   command = plan
 
   assert {
-    condition     = length(output.replicas) == 0
-    error_message = "The default replicas map must not create instances."
+    condition     = output.replica_count == 0 && length(output.replica_names) == 0 && length(output.replica_ipv4) == 0
+    error_message = "The default replica count must not create instances."
   }
 
   assert {
-    condition     = output.deployment_hosts == [{ role = "primary", name = "test-primary-fixture", ipv4 = "192.0.2.10" }]
+    condition     = output.deployment_hosts == [{ role = "primary", name = "staging-primary-fixture", ipv4 = "192.0.2.10" }]
     error_message = "The primary VM must remain a reference-only inventory entry."
   }
 }
 
-run "stable_multiple_replicas" {
-  command = plan
+run "two_deterministic_replicas" {
+  command = apply
 
   variables {
-    replicas = {
-      "test-replica-02" = {}
-      "test-replica-01" = {}
-    }
+    replica_count = 2
   }
 
   assert {
-    condition     = sort(keys(output.replicas)) == tolist(["test-replica-01", "test-replica-02"])
-    error_message = "Replica identities must come from stable map keys."
+    condition     = output.replica_names == tolist(["staging-replica-01", "staging-replica-02"])
+    error_message = "Replica names must be deterministic and ordered."
   }
 
   assert {
-    condition     = tolist([for host in output.deployment_hosts : host.name]) == tolist(["test-primary-fixture", "test-replica-01", "test-replica-02"])
+    condition     = tolist([for host in output.deployment_hosts : host.name]) == tolist(["staging-primary-fixture", "staging-replica-01", "staging-replica-02"])
     error_message = "Deployment inventory must contain the primary followed by sorted replicas."
   }
 
   assert {
-    condition     = alltrue([for name, replica in output.replicas : replica.name == name])
-    error_message = "Every replica output must preserve its stable name."
+    condition     = length(module.replica) == 2 && output.deployment_hosts[0].role == "primary"
+    error_message = "The primary must remain outside Terraform resources."
+  }
+}
+
+run "incremental_growth_keeps_existing_replicas" {
+  command = plan
+
+  variables {
+    replica_count = 3
+  }
+
+  assert {
+    condition     = output.replica_names == tolist(["staging-replica-01", "staging-replica-02", "staging-replica-03"])
+    error_message = "Growing from two to three must append replica-03."
+  }
+
+  assert {
+    condition     = length(module.replica) == 3
+    error_message = "Growing to three must keep the two stable keys and add one."
   }
 }

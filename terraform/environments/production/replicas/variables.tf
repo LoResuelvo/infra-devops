@@ -21,14 +21,14 @@ variable "primary_instance" {
   }
 }
 
-variable "replicas" {
-  description = "Replica names keyed by stable Terraform identity. Empty by default."
-  type        = map(object({}))
-  default     = {}
+variable "replica_count" {
+  description = "Total number of application replicas managed by this root."
+  type        = number
+  default     = 0
 
   validation {
-    condition     = alltrue([for name in keys(var.replicas) : can(regex("^[a-zA-Z0-9][a-zA-Z0-9._-]{0,254}$", name))])
-    error_message = "Every replica key must be a valid OpenStack instance name."
+    condition     = var.replica_count >= 0 && var.replica_count <= 99 && floor(var.replica_count) == var.replica_count
+    error_message = "replica_count must be a whole number between 0 and 99."
   }
 }
 

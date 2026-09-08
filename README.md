@@ -2,7 +2,7 @@
 
 Infraestructura como código y herramientas operativas del equipo LoResuelvo.
 Terraform modela réplicas de aplicación en OVHcloud/OpenStack mediante dos
-roots independientes: test y producción. Las VMs primarias existentes solo
+roots independientes: staging y producción. Las VMs primarias existentes solo
 forman parte del inventario de salida y están completamente fuera del lifecycle
 de Terraform.
 
@@ -11,8 +11,8 @@ de Terraform.
 ```text
 terraform/
 ├── environments/
-│   ├── test/replicas/        # root y state local de test
-│   └── production/replicas/  # root y state local de producción
+│   ├── staging/replicas/     # root y state remoto de staging
+│   └── production/replicas/  # root y state remoto de producción
 └── modules/application-node/ # imagen, keypair, VM y user_data
 cloud-init/
 └── application-node.yaml     # acceso mínimo para Ansible
@@ -22,27 +22,29 @@ ansible/
 └── roles/                    # nodo base, Docker, deploy y firewall
 ```
 
-Cada root recibe un mapa `replicas`. Su valor por defecto es `{}`: inicializar,
-validar o probar el código no decide crear VMs. Los nombres son las claves
-estables del mapa y los outputs exponen `replica_ids`, `replica_ipv4`,
-`replicas` y el inventario combinado `deployment_hosts`.
+Cada root recibe `replica_count`, cuyo valor por defecto es cero. Los nombres
+se derivan de forma estable (`staging-replica-01`,
+`production-replica-01`, etc.) y `for_each` garantiza que crecer solo agregue
+los índices faltantes. Los outputs ordenados son `replica_count`,
+`replica_names`, `replica_ipv4` y `deployment_hosts`.
 
 ## Validación segura
 
 ```bash
 terraform fmt -check -recursive terraform
-terraform -chdir=terraform/environments/test/replicas init -backend=false
-terraform -chdir=terraform/environments/test/replicas validate
-terraform -chdir=terraform/environments/test/replicas test
+terraform -chdir=terraform/environments/staging/replicas init -backend=false
+terraform -chdir=terraform/environments/staging/replicas validate
+terraform -chdir=terraform/environments/staging/replicas test
 terraform -chdir=terraform/environments/production/replicas init -backend=false
 terraform -chdir=terraform/environments/production/replicas validate
 terraform -chdir=terraform/environments/production/replicas test
 ```
 
 Los tests usan un provider mock: no requieren credenciales ni acceden a OVH.
-No se debe automatizar ni ejecutar `terraform apply` hasta revisar un plan y,
-antes del provisioning automatizado, migrar a un backend remoto compartido con
-locking.
+Los roots usan backends S3 parciales sobre buckets R2 privados separados, con
+locking nativo por archivo: `loresuelvo-terraform-state-staging` y
+`loresuelvo-terraform-state-production`. Endpoint y credenciales nunca se
+versionan.
 
 ## Bootstrap y configuración
 

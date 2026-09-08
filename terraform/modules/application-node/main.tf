@@ -22,4 +22,11 @@ resource "openstack_compute_instance_v2" "instance" {
   network {
     uuid = var.public_network_id
   }
+
+  lifecycle {
+    # The image catalog moves as OVH publishes Ubuntu updates. Existing nodes
+    # stay on the image with which they were created; only new instances use
+    # the current most-recent image.
+    ignore_changes = [image_id]
+  }
 }

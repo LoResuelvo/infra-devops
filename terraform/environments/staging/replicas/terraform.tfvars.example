@@ -1,15 +1,12 @@
-environment = "test"
+environment = "staging"
 
 primary_instance = {
-  name = "replace-with-existing-test-primary"
+  name = "replace-with-existing-staging-primary"
   ipv4 = "192.0.2.10"
 }
 
-# Deliberately empty: replicas are created only after an explicit review.
-replicas = {}
-# replicas = {
-#   "test-replica-01" = {}
-# }
+# The Actions workflow supplies this value. Keep zero for local validation.
+replica_count = 0
 
 region            = "BHS5"
 image_name        = "Ubuntu 24.04"

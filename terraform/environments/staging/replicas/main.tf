@@ -1,5 +1,5 @@
 module "replica" {
-  for_each = var.replicas
+  for_each = local.replicas
 
   source = "../../../modules/application-node"
 
@@ -12,6 +12,11 @@ module "replica" {
 }
 
 locals {
+  replicas = {
+    for index in range(var.replica_count) :
+    format("staging-replica-%02d", index + 1) => {}
+  }
+
   replica_inventory = {
     for name, replica in module.replica : name => {
       id   = replica.id

@@ -2,19 +2,19 @@
 set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
-  echo "usage: $0 test|prod" >&2
+  echo "usage: $0 staging|production" >&2
   exit 2
 fi
 
 case "$1" in
-  test|staging)
+  staging)
     base_url="https://api-test.loresuelvo.com.ar"
     ;;
-  prod|production)
+  production)
     base_url="https://api.loresuelvo.com.ar"
     ;;
   *)
-    echo "environment must be test or prod" >&2
+    echo "environment must be staging or production" >&2
     exit 2
     ;;
 esac
