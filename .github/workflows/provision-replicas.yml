@@ -1,0 +1,22 @@
+name: Provision replicas
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to provision
+        type: choice
+        required: true
+        options: [staging, production]
+      desired-replica-count:
+        description: Total desired number of replicas
+        type: number
+        required: true
+permissions: {contents: read, id-token: write}
+jobs:
+  provision:
+    uses: ./.github/workflows/provision-replicas-internal.yml
+    with:
+      environment: ${{ inputs.environment }}
+      terraform-root: terraform/environments/${{ inputs.environment }}/replicas
+      desired-replica-count: ${{ inputs.desired-replica-count }}
+    secrets: inherit

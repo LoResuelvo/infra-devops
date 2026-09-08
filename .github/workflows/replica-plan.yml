@@ -1,0 +1,78 @@
+name: Plan replicas
+on:
+  workflow_call:
+    inputs:
+      environment: {type: string, required: true}
+      terraform-root: {type: string, required: true}
+      desired-replica-count: {type: number, required: true}
+    outputs:
+      current-count: {value: "${{ jobs.plan.outputs.current-count }}"}
+      decision: {value: "${{ jobs.plan.outputs.decision }}"}
+      state-fingerprint: {value: "${{ jobs.plan.outputs.state-fingerprint }}"}
+      release-fingerprint: {value: "${{ jobs.plan.outputs.release-fingerprint }}"}
+permissions: {contents: read, id-token: write}
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      current-count: ${{ steps.plan.outputs.current-count }}
+      decision: ${{ steps.plan.outputs.decision }}
+      state-fingerprint: ${{ steps.plan.outputs.state-fingerprint }}
+      release-fingerprint: ${{ steps.releases.outputs.release-fingerprint }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3.1.2
+        with: {terraform_version: 1.16.1, terraform_wrapper: false}
+      - name: Fetch infrastructure secrets
+        uses: Infisical/secrets-action@v1.0.17
+        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /infrastructure, include-imports: false, recursive: false}
+      - name: Validate inputs
+        run: python3 scripts/provisioning/validate-replica-change.py context '${{ inputs.environment }}' '${{ inputs.terraform-root }}'
+      - name: Initialize Terraform
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          TERRAFORM_ROOT: ${{ inputs.terraform-root }}
+          PRIMARY_NAME: ${{ inputs.environment == 'production' && vars.PRODUCTION_TF_PRIMARY_INSTANCE_NAME || vars.STAGING_TF_PRIMARY_INSTANCE_NAME }}
+          PRIMARY_IPV4: ${{ inputs.environment == 'production' && vars.PRODUCTION_TF_PRIMARY_INSTANCE_IPV4 || vars.STAGING_TF_PRIMARY_INSTANCE_IPV4 }}
+          REGION: ${{ inputs.environment == 'production' && vars.PRODUCTION_TF_REGION || vars.STAGING_TF_REGION }}
+          IMAGE_NAME: ${{ inputs.environment == 'production' && vars.PRODUCTION_TF_IMAGE_NAME || vars.STAGING_TF_IMAGE_NAME }}
+          FLAVOR_NAME: ${{ inputs.environment == 'production' && vars.PRODUCTION_TF_FLAVOR_NAME || vars.STAGING_TF_FLAVOR_NAME }}
+          PUBLIC_NETWORK_ID: ${{ inputs.environment == 'production' && vars.PRODUCTION_TF_PUBLIC_NETWORK_ID || vars.STAGING_TF_PUBLIC_NETWORK_ID }}
+        run: |
+          echo "::add-mask::$PRIMARY_IPV4"
+          {
+            echo "AWS_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID"
+            echo "AWS_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY"
+            echo "AWS_ENDPOINT_URL_S3=$R2_ENDPOINT"
+            echo "TF_VAR_environment=$ENVIRONMENT"
+            echo "TF_VAR_primary_instance={\"name\":\"$PRIMARY_NAME\",\"ipv4\":\"$PRIMARY_IPV4\"}"
+            echo "TF_VAR_region=$REGION"
+            echo "TF_VAR_image_name=$IMAGE_NAME"
+            echo "TF_VAR_flavor_name=$FLAVOR_NAME"
+            echo "TF_VAR_public_network_id=$PUBLIC_NETWORK_ID"
+            echo "TF_VAR_operator_ssh_public_key=$OPERATOR_SSH_PUBLIC_KEY"
+          } >> "$GITHUB_ENV"
+          terraform -chdir="$TERRAFORM_ROOT" init -input=false -reconfigure -backend-config="bucket=loresuelvo-terraform-state-$ENVIRONMENT" >/dev/null
+      - name: Create and validate plan
+        id: plan
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          TERRAFORM_ROOT: ${{ inputs.terraform-root }}
+          DESIRED_COUNT: ${{ inputs.desired-replica-count }}
+        run: |
+          current_count=$(terraform -chdir="$TERRAFORM_ROOT" output -raw replica_count)
+          decision=$(python3 scripts/provisioning/validate-replica-change.py count "$current_count" "$DESIRED_COUNT")
+          echo "current-count=$current_count" >> "$GITHUB_OUTPUT"
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          terraform -chdir="$TERRAFORM_ROOT" output -json | sha256sum | sed 's/ .*//' | sed 's/^/state-fingerprint=/' >> "$GITHUB_OUTPUT"
+          [[ "$decision" == grow ]] || exit 0
+          terraform -chdir="$TERRAFORM_ROOT" plan -input=false -out="$RUNNER_TEMP/replicas.tfplan" -var="replica_count=$DESIRED_COUNT" >"$RUNNER_TEMP/terraform-plan.log" 2>&1
+          terraform -chdir="$TERRAFORM_ROOT" show -json "$RUNNER_TEMP/replicas.tfplan" > "$RUNNER_TEMP/plan.json"
+          python3 scripts/provisioning/validate-replica-change.py plan "$RUNNER_TEMP/plan.json" "$ENVIRONMENT" "$current_count" "$DESIRED_COUNT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Resolve deployed releases
+        if: steps.plan.outputs.decision == 'grow'
+        id: releases
+        env: {GITHUB_TOKEN: "${{ github.token }}"}
+        run: |
+          python3 scripts/provisioning/resolve-deployed-images.py '${{ inputs.environment }}' "$RUNNER_TEMP/releases.env"
+          sha256sum "$RUNNER_TEMP/releases.env" | sed 's/ .*//' | sed 's/^/release-fingerprint=/' >> "$GITHUB_OUTPUT"
