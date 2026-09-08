@@ -23,7 +23,7 @@ server {
 server {
     listen 80;
 
-    server_name __API_SERVER_NAMES__;
+    server_name {{ api_server_names }};
 
     location / {
         return 301 https://$host$request_uri;
@@ -33,7 +33,7 @@ server {
 server {
     listen 80;
 
-    server_name __WEB_SERVER_NAMES__;
+    server_name {{ web_server_names }};
 
     location / {
         return 301 https://$host$request_uri;
@@ -43,7 +43,7 @@ server {
 server {
     listen 80;
 
-    server_name __ADMIN_SERVER_NAMES__;
+    server_name {{ admin_server_names }};
 
     location / {
         return 301 https://$host$request_uri;
@@ -53,7 +53,7 @@ server {
 server {
     listen 443 ssl;
 
-    server_name __API_SERVER_NAMES__;
+    server_name {{ api_server_names }};
 
     ssl_certificate /etc/loresuelvo/gateway/tls/origin.crt;
     ssl_certificate_key /etc/loresuelvo/gateway/tls/origin.key;
@@ -90,7 +90,7 @@ server {
 server {
     listen 443 ssl;
 
-    server_name __WEB_SERVER_NAMES__;
+    server_name {{ web_server_names }};
 
     ssl_certificate /etc/loresuelvo/gateway/tls/origin.crt;
     ssl_certificate_key /etc/loresuelvo/gateway/tls/origin.key;
@@ -109,7 +109,7 @@ server {
 server {
     listen 443 ssl;
 
-    server_name __ADMIN_SERVER_NAMES__;
+    server_name {{ admin_server_names }};
 
     ssl_certificate /etc/loresuelvo/gateway/tls/origin.crt;
     ssl_certificate_key /etc/loresuelvo/gateway/tls/origin.key;

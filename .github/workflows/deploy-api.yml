@@ -32,7 +32,7 @@ jobs:
           IMAGE_REF: ${{ inputs.image-ref }}
           RELEASE_TAG: ${{ inputs.release-tag }}
         run: |
-          scripts/deployment/validate-api-inputs.sh \
+          python3 scripts/deployment.py release api \
             "$CALLER_REPOSITORY" "$CALLER_REF_TYPE" "$CALLER_TAG" \
             "$IMAGE_REF" "$RELEASE_TAG"
 

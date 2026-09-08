@@ -1,0 +1,54 @@
+---
+- name: Deploy Web App sequentially
+  hosts: application_nodes
+  serial: 1
+  gather_facts: false
+  vars:
+    ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
+    ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
+  pre_tasks:
+    - name: Validate Web App deployment
+      ansible.builtin.assert:
+        that:
+          - image_ref is match('^ghcr\\.io/loresuelvo/webapp@sha256:[a-f0-9]{64}$')
+          - release_tag is match('^v[0-9]+\\.[0-9]+\\.[0-9]+$')
+          - lookup('file', config_file) is search('(?m)^APP_ENV=' + environment_name + '$')
+          - lookup('file', secrets_file) is search('(?m)^AUTH0_CLIENT_ID=')
+          - lookup('file', secrets_file) is search('(?m)^AUTH0_CLIENT_SECRET=')
+          - lookup('file', secrets_file) is search('(?m)^AUTH0_SECRET=')
+          - ghcr_user | length > 0
+          - ghcr_token | length > 0
+      no_log: true
+  tasks:
+    - name: Install Web App environment
+      ansible.builtin.copy:
+        dest: /etc/loresuelvo/webapp/webapp.env
+        mode: "0600"
+        content: "{{ lookup('file', config_file) }}\n{{ lookup('file', secrets_file) }}\n"
+      no_log: true
+    - name: Install Web App Compose file
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../deploy/webapp/compose.yml"
+        dest: /opt/loresuelvo/webapp/compose.yml
+        mode: "0640"
+    - name: Log in to GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        username: "{{ ghcr_user }}"
+        password: "{{ ghcr_token }}"
+      no_log: true
+    - name: Start Web App
+      community.docker.docker_compose_v2:
+        project_src: /opt/loresuelvo/webapp
+        pull: always
+        services: [loresuelvo]
+        state: present
+        wait: true
+        wait_timeout: 60
+      environment:
+        IMAGE_REF: "{{ image_ref }}"
+    - name: Record Web App release
+      ansible.builtin.copy:
+        dest: /opt/loresuelvo/webapp/CURRENT_RELEASE
+        mode: "0640"
+        content: "RELEASE_TAG={{ release_tag }}\nIMAGE_REF={{ image_ref }}\n"

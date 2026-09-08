@@ -8,6 +8,14 @@
     - ../group_vars/all.yml
 
   pre_tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+
+    - name: Wait for cloud-init
+      ansible.builtin.command: cloud-init status --wait
+      changed_when: false
+
     - name: Require Ubuntu 24.04
       ansible.builtin.assert:
         that:

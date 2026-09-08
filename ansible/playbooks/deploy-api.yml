@@ -1,0 +1,84 @@
+---
+- name: Prepare API on every node
+  hosts: application_nodes
+  serial: 1
+  gather_facts: false
+  vars:
+    ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
+    ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
+  pre_tasks:
+    - name: Validate API deployment
+      ansible.builtin.assert:
+        that:
+          - image_ref is match('^ghcr\\.io/loresuelvo/api@sha256:[a-f0-9]{64}$')
+          - release_tag is match('^v[0-9]+\\.[0-9]+\\.[0-9]+$')
+          - deployment_mode in ['deploy', 'hydrate']
+          - lookup('file', config_file) is search('(?m)^ENVIRONMENT=' + environment_name + '$')
+          - lookup('file', secrets_file) is search('(?m)^DATABASE_URL=')
+          - ghcr_user | length > 0
+          - ghcr_token | length > 0
+      no_log: true
+  tasks:
+    - name: Install API environment
+      ansible.builtin.copy:
+        dest: /etc/loresuelvo/api/api.env
+        mode: "0600"
+        content: "{{ lookup('file', config_file) }}\n{{ lookup('file', secrets_file) }}\n"
+      no_log: true
+    - name: Install API Compose file
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../deploy/api/compose.yml"
+        dest: /opt/loresuelvo/api/compose.yml
+        mode: "0640"
+    - name: Log in to GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        username: "{{ ghcr_user }}"
+        password: "{{ ghcr_token }}"
+      no_log: true
+    - name: Pull API image
+      community.docker.docker_compose_v2_pull:
+        project_src: /opt/loresuelvo/api
+        services: "{{ ['api', 'migrate'] if deployment_mode == 'deploy' else ['api'] }}"
+      environment:
+        IMAGE_REF: "{{ image_ref }}"
+
+- name: Migrate the database once
+  hosts: application_nodes
+  gather_facts: false
+  tasks:
+    - name: Run API migrations
+      community.docker.docker_compose_v2_run:
+        project_src: /opt/loresuelvo/api
+        service: migrate
+        cleanup: true
+      environment:
+        IMAGE_REF: "{{ image_ref }}"
+      when:
+        - deployment_mode == 'deploy'
+        - inventory_hostname == ansible_play_hosts_all[0]
+
+- name: Deploy API sequentially
+  hosts: application_nodes
+  serial: 1
+  gather_facts: false
+  tasks:
+    - name: Start API
+      community.docker.docker_compose_v2:
+        project_src: /opt/loresuelvo/api
+        services: [api]
+        state: present
+      environment:
+        IMAGE_REF: "{{ image_ref }}"
+    - name: Wait for API readiness
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/health/ready
+      register: api_health
+      retries: 30
+      delay: 2
+      until: api_health.status == 200
+    - name: Record API release
+      ansible.builtin.copy:
+        dest: /opt/loresuelvo/api/CURRENT_RELEASE
+        mode: "0640"
+        content: "RELEASE_TAG={{ release_tag }}\nIMAGE_REF={{ image_ref }}\n"
