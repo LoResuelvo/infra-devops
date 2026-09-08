@@ -27,28 +27,6 @@ terraform -chdir="$TF_ROOT" test
 Los tests usan OpenStack simulado y no crean recursos. Repetirlos en ambos
 roots cuando cambien el módulo o cloud-init.
 
-## Migración única del state local a R2
-
-Crear primero ambos buckets privados. Migrar staging antes que producción y
-usar una credencial de escritura del ambiente correspondiente:
-
-```bash
-export AWS_ACCESS_KEY_ID=...
-export AWS_SECRET_ACCESS_KEY=...
-export AWS_ENDPOINT_URL_S3=https://ACCOUNT_ID.r2.cloudflarestorage.com
-
-terraform -chdir="$TF_ROOT" init -migrate-state \
-  -backend-config="bucket=loresuelvo-terraform-state-staging"
-# Para el otro root, usar loresuelvo-terraform-state-production.
-terraform -chdir="$TF_ROOT" plan -detailed-exitcode
-```
-
-Confirmar que el plan termina con código 0 (sin cambios) antes de migrar el
-siguiente ambiente. Conservar el state local fuera del repositorio hasta
-validar la copia remota. Finalmente, iniciar dos operaciones simultáneas contra
-el mismo root y confirmar que una adquiere el lock y la otra espera o falla sin
-escribir. Nunca usar `-lock=false`.
-
 ## Preparar Ansible
 
 Ansible se instala solo en el controlador; la VM necesita Python y SSH:
@@ -106,12 +84,12 @@ ansible/tests/check-idempotence.sh \
 
 ## Alta de réplicas desde GitHub Actions
 
-Ejecutar `Provision staging replicas` o `Provision production replicas` e
-indicar la cantidad total deseada. No hay selector libre de ambiente. Una
+Ejecutar `Provision replicas`, elegir staging o producción e indicar la
+cantidad total deseada. Una
 cantidad menor falla; una cantidad igual termina sin aplicar; una mayor crea y
 configura únicamente los índices faltantes. El apply de producción espera la
-aprobación de `production-infrastructure` y vuelve a validar state y releases
-antes de continuar.
+aprobación de `production-infrastructure`; state y releases se vuelven a
+validar antes de aplicar y desplegar.
 
 Si Terraform terminó pero Ansible o una aplicación fallaron, usar **Re-run
 failed jobs** sobre el mismo run. Un `run_attempt` posterior retoma únicamente
@@ -140,13 +118,10 @@ Crear como variables de repositorio, por cada prefijo `STAGING` y
 En Infisical, para cada ambiente, usar rutas consistentes:
 
 ```text
-/infrastructure/terraform-write  # R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT
-/infrastructure/terraform-read   # credencial R2 distinta y de solo lectura
-/infrastructure/openstack        # variables OS_* individuales
-/infrastructure/ssh              # OPERATOR_SSH_* y DEPLOY_SSH_PUBLIC_KEYS_JSON
-/deployments                     # clave deploy, GHCR y certificado del gateway
-/api
-/webapp
+/infrastructure  # R2, OpenStack y claves del operador
+/deployments     # claves deploy, GHCR y certificado del gateway
+/api             # configuración privada de API
+/webapp          # configuración privada de Web App
 ```
 
 Crear ambos buckets R2 privados y el environment GitHub
@@ -161,9 +136,8 @@ una VM y keypair, `terraform.tfvars` real y claves de deployment reales.
 1. Establecer temporalmente `replica_count = 1` en el root de staging.
 2. Generar y revisar un plan que agregue solo esa VM y su keypair; aplicar
    manualmente.
-3. Ejecutar el script de configuración para staging con el nodo nuevo obtenido
-   de `deployment_hosts`; genera un inventario temporal y espera
-   cloud-init/SSH antes de configurar y verificar.
+3. Generar un inventario temporal desde `deployment_hosts` y ejecutar los
+   playbooks de configuración y verificación.
 4. Revisar el resultado del playbook de verificación.
 5. Quitar la réplica del mapa, revisar que el plan destruya solo la VM temporal
    y su keypair, aplicar y confirmar su ausencia en Terraform y OpenStack.

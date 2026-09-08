@@ -78,10 +78,9 @@ roles se usan para los dos ambientes; solo cambia la clave pública suministrada
 
 ## Validación
 
-Los scripts de despliegue comparten validación de hosts y preparación SSH en
-`scripts/lib/deployment.sh`. API y Web App comparten validación de configuración,
-distribución y registro de releases en `scripts/lib/application-deployment.sh`;
-cada entrada conserva sus migraciones y chequeos de disponibilidad.
+Los despliegues remotos usan los módulos de Docker Compose, copia, plantillas y
+healthchecks de Ansible. El inventario privado se genera desde
+`deployment_hosts`; no se publica como output ni artifact.
 Los dominios del gateway se declaran en `deploy/gateway/config/{staging,prod}.conf`.
 Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
 modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.
@@ -93,8 +92,7 @@ migraciones; estas siguen perteneciendo únicamente al despliegue normal.
 El chequeo de Admin valida la ruta y virtual host del gateway; la aplicación
 Admin tiene un lifecycle de despliegue separado y no forma parte de esta alta.
 Las comprobaciones locales del flujo se ejecutan con
-`bash scripts/tests/deployment.sh` y `bash scripts/tests/provisioning.sh`,
-usando Terraform, Ansible, SSH y SCP simulados.
+`python3 -m unittest discover -s scripts/tests`.
 
 Los tests mock de Terraform verifican cero réplicas por defecto, identidades
 estables, inventario y cloud-init YAML válido con SSH/Python/UFW y sin Docker ni
