@@ -32,7 +32,7 @@ jobs:
           IMAGE_REF: ${{ inputs.image-ref }}
           RELEASE_TAG: ${{ inputs.release-tag }}
         run: |
-          scripts/validate-webapp-deployment-inputs.sh \
+          scripts/deployment/validate-webapp-inputs.sh \
             "$CALLER_REPOSITORY" "$CALLER_REF_TYPE" "$CALLER_TAG" \
             "$IMAGE_REF" "$RELEASE_TAG"
 

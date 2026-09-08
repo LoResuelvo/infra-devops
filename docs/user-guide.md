@@ -104,6 +104,55 @@ ansible/tests/check-idempotence.sh \
   ansible/vars/deploy-keys-staging.yml
 ```
 
+## Alta de réplicas desde GitHub Actions
+
+Ejecutar `Provision staging replicas` o `Provision production replicas` e
+indicar la cantidad total deseada. No hay selector libre de ambiente. Una
+cantidad menor falla; una cantidad igual termina sin aplicar; una mayor crea y
+configura únicamente los índices faltantes. El apply de producción espera la
+aprobación de `production-infrastructure` y vuelve a validar state y releases
+antes de continuar.
+
+Si Terraform terminó pero Ansible o una aplicación fallaron, usar **Re-run
+failed jobs** sobre el mismo run. Un `run_attempt` posterior retoma únicamente
+las réplicas creadas por el intento original. Una ejecución manual nueva con la
+misma cantidad se considera sin cambios y no reconfigura nodos.
+
+Cada deploy exitoso publica en su GitHub Deployment el tag y la referencia por
+digest mediante `environment.url`. Antes de la primera alta deben haberse
+ejecutado al menos una vez los workflows actualizados de API, Web App y gateway
+en el ambiente. El gateway se dispara indicando explícitamente
+`release-tag` e `image-ref`; API y Web App reciben esos datos desde sus
+workflows de release.
+
+Crear como variables de repositorio, por cada prefijo `STAGING` y
+`PRODUCTION`:
+
+```text
+<ENV>_TF_PRIMARY_INSTANCE_NAME
+<ENV>_TF_PRIMARY_INSTANCE_IPV4
+<ENV>_TF_REGION
+<ENV>_TF_IMAGE_NAME
+<ENV>_TF_FLAVOR_NAME
+<ENV>_TF_PUBLIC_NETWORK_ID
+```
+
+En Infisical, para cada ambiente, usar rutas consistentes:
+
+```text
+/infrastructure/terraform-write  # R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT
+/infrastructure/terraform-read   # credencial R2 distinta y de solo lectura
+/infrastructure/openstack        # variables OS_* individuales
+/infrastructure/ssh              # OPERATOR_SSH_* y DEPLOY_SSH_PUBLIC_KEYS_JSON
+/deployments                     # clave deploy, GHCR y certificado del gateway
+/api
+/webapp
+```
+
+Crear ambos buckets R2 privados y el environment GitHub
+`production-infrastructure` con aprobación requerida. No guardar nombres,
+cantidades ni inventarios de hosts en Infisical.
+
 ## Prueba temporal en OVH
 
 Se requieren OpenRC y contraseña vigentes, clave privada operativa, cuota para
@@ -112,9 +161,9 @@ una VM y keypair, `terraform.tfvars` real y claves de deployment reales.
 1. Establecer temporalmente `replica_count = 1` en el root de staging.
 2. Generar y revisar un plan que agregue solo esa VM y su keypair; aplicar
    manualmente.
-3. Ejecutar el script de configuración para staging. El script obtiene el
-   host desde `deployment_hosts`, genera un inventario temporal, espera
-   cloud-init/SSH, ejecuta dos pasadas y verifica `changed=0` en la segunda.
+3. Ejecutar el script de configuración para staging con el nodo nuevo obtenido
+   de `deployment_hosts`; genera un inventario temporal y espera
+   cloud-init/SSH antes de configurar y verificar.
 4. Revisar el resultado del playbook de verificación.
 5. Quitar la réplica del mapa, revisar que el plan destruya solo la VM temporal
    y su keypair, aplicar y confirmar su ausencia en Terraform y OpenStack.

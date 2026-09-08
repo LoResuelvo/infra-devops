@@ -8,7 +8,7 @@
 | `application-node` | Crea keypair, VM, red y entrega `user_data`. |
 | Cloud-init | Deja Ubuntu accesible como `ubuntu` con Python, sudo y SSH seguro. |
 | Ansible | Configura usuario, Docker, firewall, actualizaciones y nodo. |
-| Deployments | Configurarán API y webapp; están fuera de este incremento. |
+| Deployments | Instalan API, Web App y gateway, y publican la versión activa. |
 
 ## Topología y lifecycle
 
@@ -85,9 +85,16 @@ cada entrada conserva sus migraciones y chequeos de disponibilidad.
 Los dominios del gateway se declaran en `deploy/gateway/config/{staging,prod}.conf`.
 Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
 modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.
-La versión de configuración correspondiente es `2026-09-07.2`.
+La versión de configuración correspondiente es `2026-09-07.2`. Cada despliegue
+publica tag y digest inmutable en la URL de su GitHub Deployment. El alta de
+réplicas consulta el último Deployment exitoso de API, Web App y gateway para
+el ambiente. El modo `hydrate` de la API instala un nodo nuevo sin ejecutar
+migraciones; estas siguen perteneciendo únicamente al despliegue normal.
+El chequeo de Admin valida la ruta y virtual host del gateway; la aplicación
+Admin tiene un lifecycle de despliegue separado y no forma parte de esta alta.
 Las comprobaciones locales del flujo se ejecutan con
-`bash scripts/tests/deployment.sh`, usando SSH/SCP simulados.
+`bash scripts/tests/deployment.sh` y `bash scripts/tests/provisioning.sh`,
+usando Terraform, Ansible, SSH y SCP simulados.
 
 Los tests mock de Terraform verifican cero réplicas por defecto, identidades
 estables, inventario y cloud-init YAML válido con SSH/Python/UFW y sin Docker ni

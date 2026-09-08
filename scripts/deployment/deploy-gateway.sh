@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 ENVIRONMENT HOSTS" >&2
+if [[ $# -ne 4 ]]; then
+  echo "usage: $0 ENVIRONMENT HOSTS IMAGE_REF RELEASE_TAG" >&2
   exit 2
 fi
 
 environment=$1
 hosts_input=$2
-script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+image_ref=$3
+release_tag=$4
+script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 gateway_compose="$script_root/deploy/gateway/compose.yml"
 nginx_template="$script_root/deploy/gateway/nginx/default.conf.template"
 
 source "$script_root/scripts/lib/deployment.sh"
 
 validate_environment "$environment"
+[[ "$image_ref" =~ ^nginx@sha256:[a-f0-9]{64}$ ]] || fail "Gateway image reference is invalid."
+[[ "$release_tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-alpine)?$ ]] || fail "Gateway release tag is invalid."
 [[ -f "$gateway_compose" && -f "$nginx_template" ]] || fail "A gateway deployment artifact is missing."
 require_env DEPLOY_SSH_PRIVATE_KEY
 require_env CLOUDFLARE_ORIGIN_CERT
@@ -69,7 +73,8 @@ for host in "${hosts[@]}"; do
   scp "${ssh_options[@]}" "$origin_cert" "$remote:/etc/loresuelvo/gateway/tls/origin.crt.next"
   scp "${ssh_options[@]}" "$origin_key" "$remote:/etc/loresuelvo/gateway/tls/origin.key.next"
 
-  ssh "${ssh_options[@]}" "$remote" 'bash -se' <<'REMOTE'
+  ssh "${ssh_options[@]}" "$remote" bash -se -- "$image_ref" <<'REMOTE'
+export GATEWAY_IMAGE_REF=$1
 install -m 0640 /opt/loresuelvo/gateway/compose.yml.next /opt/loresuelvo/gateway/compose.yml
 install -m 0640 /opt/loresuelvo/gateway/nginx/default.conf.next /opt/loresuelvo/gateway/nginx/default.conf
 install -m 0640 /etc/loresuelvo/gateway/tls/origin.crt.next /etc/loresuelvo/gateway/tls/origin.crt
@@ -82,6 +87,13 @@ docker compose -f /opt/loresuelvo/gateway/compose.yml run \
 docker compose -f /opt/loresuelvo/gateway/compose.yml up -d --no-deps --force-recreate gateway
 docker inspect nginx-proxy --format '{{.State.Running}}' | grep -qx true
 docker compose -f /opt/loresuelvo/gateway/compose.yml ps gateway
+REMOTE
+
+  ssh "${ssh_options[@]}" "$remote" bash -se -- "$release_tag" "$image_ref" <<'REMOTE'
+marker=/opt/loresuelvo/gateway/CURRENT_RELEASE
+printf 'RELEASE_TAG=%s\nIMAGE_REF=%s\n' "$1" "$2" > "$marker.next"
+chmod 0640 "$marker.next"
+mv "$marker.next" "$marker"
 REMOTE
 
   echo "Checking $environment gateway node"

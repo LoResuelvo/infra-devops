@@ -51,22 +51,30 @@ for app in api webapp; do
     config=staging
     [[ "$environment" != production ]] || config=prod
     : > "$TEST_LOG"
-    bash "scripts/deploy-$app.sh" "$environment" node1,node2 "$image" v1.2.3 "deploy/$app/config/$config.conf" "$secrets"
+    bash "scripts/deployment/deploy-$app.sh" "$environment" node1,node2 "$image" v1.2.3 "deploy/$app/config/$config.conf" "$secrets"
     [[ "$(cat "$TEST_LOG")" == "$expected" ]]
   done
+  if [[ "$app" == api ]]; then
+    : > "$TEST_LOG"
+    bash scripts/deployment/deploy-api.sh staging node1,node2 "$image" v1.2.3 \
+      deploy/api/config/staging.conf "$secrets" hydrate
+    ! grep -q '^migrate$' "$TEST_LOG"
+    [[ $(grep -c '^rollout$' "$TEST_LOG") == 2 ]]
+  fi
   : > "$TEST_LOG"
-  if FAIL_ROLLOUT=true bash "scripts/deploy-$app.sh" staging node1,node2 "$image" v1.2.3 "deploy/$app/config/staging.conf" "$secrets"; then
+  if FAIL_ROLLOUT=true bash "scripts/deployment/deploy-$app.sh" staging node1,node2 "$image" v1.2.3 "deploy/$app/config/staging.conf" "$secrets"; then
     exit 1
   fi
   [[ $(grep -c '^rollout$' "$TEST_LOG") == 1 ]]
   ! grep -q '^release$' "$TEST_LOG"
   for hosts in '' node1,node1 '-invalid'; do
-    if bash "scripts/deploy-$app.sh" staging "$hosts" "$image" v1.2.3 "deploy/$app/config/staging.conf" "$secrets"; then
+    if bash "scripts/deployment/deploy-$app.sh" staging "$hosts" "$image" v1.2.3 "deploy/$app/config/staging.conf" "$secrets"; then
       exit 1
     fi
   done
 done
 for environment in staging production; do
-  bash scripts/deploy-gateway.sh "$environment" node1,node2
+  bash scripts/deployment/deploy-gateway.sh "$environment" node1,node2 \
+    "nginx@sha256:$(printf '%064d' 0)" 1.29.1-alpine
 done
 echo "Deployment orchestration checks passed."

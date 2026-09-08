@@ -1,6 +1,6 @@
 services:
   gateway:
-    image: nginx:alpine
+    image: ${GATEWAY_IMAGE_REF:?GATEWAY_IMAGE_REF is required}
     container_name: nginx-proxy
     ports:
       - "80:80"

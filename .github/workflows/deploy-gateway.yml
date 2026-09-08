@@ -10,6 +10,14 @@ on:
         options:
           - staging
           - production
+      image-ref:
+        description: Immutable nginx image reference (nginx@sha256:...)
+        type: string
+        required: true
+      release-tag:
+        description: Nginx release (for example 1.29.1-alpine)
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -18,10 +26,28 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://github.com/LoResuelvo/infra-devops/pkgs/container/gateway#release_tag=${{ inputs.release-tag }}&image_ref=${{ inputs.image-ref }}
     steps:
       - name: Checkout deployment code
         uses: actions/checkout@v6
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_wrapper: false
+
+      - name: Fetch read-only Terraform state credentials
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /infrastructure/terraform-read
+          include-imports: false
+          recursive: false
 
       - name: Fetch gateway deployment credentials
         uses: Infisical/secrets-action@v1.0.17
@@ -37,4 +63,12 @@ jobs:
       - name: Deploy and verify gateway
         env:
           DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
-        run: scripts/deploy-gateway.sh "$DEPLOY_ENVIRONMENT" "$DEPLOY_HOSTS"
+          GATEWAY_IMAGE_REF: ${{ inputs.image-ref }}
+          GATEWAY_RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          hosts_file="$RUNNER_TEMP/deployment-hosts"
+          scripts/deployment/prepare-hosts.sh "$DEPLOY_ENVIRONMENT" "$hosts_file"
+          while IFS= read -r host; do echo "::add-mask::$host"; done < "$hosts_file"
+          DEPLOY_HOSTS=$(<"$hosts_file")
+          scripts/deployment/deploy-gateway.sh "$DEPLOY_ENVIRONMENT" "$DEPLOY_HOSTS" \
+            "$GATEWAY_IMAGE_REF" "$GATEWAY_RELEASE_TAG"

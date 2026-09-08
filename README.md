@@ -67,17 +67,24 @@ ansible-galaxy collection install -r ansible/requirements.yml
 Las versiones fijadas son `ansible-core 2.21.3`, `ansible-lint 26.8.0`,
 `community.general 13.3.0` y `community.docker 5.2.2`.
 
-Después de aplicar manualmente la réplica temporal, el enlace desde el output de
-Terraform hasta Ansible se automatiza con:
+El alta configura exclusivamente los nodos nuevos con un inventario efímero:
 
 ```bash
-scripts/configure-test-ansible-validation.sh
+scripts/provisioning/configure-new-replicas.sh staging \
+  '[{"name":"staging-replica-01","ipv4":"192.0.2.31"}]'
 ```
 
-El script exige que el state contenga únicamente
-`test-ansible-validation-01`; genera el inventario ignorado, espera SSH y
-cloud-init, comprueba idempotencia y ejecuta la verificación. Nunca ejecuta
-`terraform plan`, `apply` ni `destroy`.
+El script genera todo dentro de `$RUNNER_TEMP`, espera SSH y cloud-init y
+ejecuta configuración y verificación. Los despliegues normales obtienen su
+inventario completo desde `deployment_hosts` mediante Terraform; Infisical ya
+no almacena `DEPLOY_HOSTS`.
+
+Los workflows manuales `Provision staging replicas` y
+`Provision production replicas` reciben la cantidad total deseada, rechazan
+reducciones y terminan sin cambios cuando coincide con el state. Producción
+presenta el plan antes de requerir aprobación en `production-infrastructure`.
+Las imágenes se resuelven desde los últimos GitHub Deployments exitosos del
+ambiente y siempre se despliegan por digest.
 
 ## Documentación
 
