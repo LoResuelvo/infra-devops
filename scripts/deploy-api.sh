@@ -13,104 +13,20 @@ release_tag=$4
 config_file=$5
 app_secrets_file=$6
 script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-api_compose="$script_root/deploy/api/compose.yml"
+app_compose="$script_root/deploy/api/compose.yml"
 
-fail() {
-  echo "ERROR: $*" >&2
-  exit 1
-}
+source "$script_root/scripts/lib/deployment.sh"
+source "$script_root/scripts/lib/application-deployment.sh"
 
-require_env() {
-  local name=$1
-  [[ -n "${!name-}" ]] || fail "Required variable $name is missing."
-}
-
-[[ "$environment" == "staging" || "$environment" == "production" ]] || \
-  fail "Environment must be staging or production."
-[[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || \
-  fail "Release tag must have vX.Y.Z format."
-[[ "$image_ref" =~ ^ghcr\.io/loresuelvo/api@sha256:[a-f0-9]{64}$ ]] || \
-  fail "Image reference is invalid."
-[[ -f "$config_file" && -s "$app_secrets_file" && -f "$api_compose" ]] || \
-  fail "A deployment artifact is missing."
-grep -qx "ENVIRONMENT=$environment" "$config_file" || \
-  fail "Configuration does not match environment."
-
-require_env DEPLOY_SSH_PRIVATE_KEY
-require_env GHCR_USER
-require_env GHCR_TOKEN
-[[ "$GHCR_USER" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]] || fail "GHCR_USER is invalid."
-
-awk '
-  /^[A-Z][A-Z0-9_]*='\''[^'\'']+'\''$/ { found = 1; next }
-  { exit 1 }
-  END { if (!found) exit 1 }
-' "$app_secrets_file" || fail "Application secrets file is invalid."
-grep -q "^DATABASE_URL=" "$app_secrets_file" || fail "DATABASE_URL is missing."
-! grep -Eq '^(DEPLOY_HOSTS|DEPLOY_SSH_PRIVATE_KEY|GHCR_USER|GHCR_TOKEN|CLOUDFLARE_ORIGIN_(CERT|KEY))=' \
-  "$app_secrets_file" || fail "Deployment credentials found in application secrets."
-
-awk -F= '
-  /^[A-Z][A-Z0-9_]*=/ {
-    if (seen[$1]++) exit 1
-  }
-' "$config_file" "$app_secrets_file" || fail "Duplicate application configuration key."
-
-normalized_hosts=${hosts_input//,/ }
-normalized_hosts=${normalized_hosts//$'\n'/ }
-read -r -a hosts <<< "$normalized_hosts"
-[[ ${#hosts[@]} -gt 0 ]] || fail "At least one deployment host is required."
-
-declare -A seen_hosts=()
-for host in "${hosts[@]}"; do
-  [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || fail "Deployment host is invalid."
-  [[ -z "${seen_hosts[$host]-}" ]] || fail "Deployment hosts must be unique."
-  seen_hosts[$host]=1
-  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-    printf '::add-mask::%s\n' "$host"
-  fi
-done
-
-work_dir=$(mktemp -d)
-ssh_key="$work_dir/deploy_key"
-api_env="$work_dir/api.env"
-trap 'rm -rf "$work_dir"' EXIT
-umask 077
-
-printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$ssh_key"
-cp "$config_file" "$api_env"
-{
-  printf '\n'
-  cat "$app_secrets_file"
-  printf '\n'
-} >> "$api_env"
-
-ssh_options=(
-  -i "$ssh_key"
-  -o BatchMode=yes
-  -o IdentitiesOnly=yes
-  -o StrictHostKeyChecking=accept-new
-  -o ConnectTimeout=15
-)
+validate_environment "$environment"
+validate_application api ENVIRONMENT DATABASE_URL
+parse_hosts "$hosts_input"
+prepare_ssh
+runtime_env="$work_dir/api.env"
+combine_application_env "$config_file" "$app_secrets_file" "$runtime_env"
 
 for host in "${hosts[@]}"; do
-  remote="deploy@$host"
-  echo "Preparing $environment node"
-  scp "${ssh_options[@]}" "$api_env" "$remote:/etc/loresuelvo/api/api.env.next"
-  scp "${ssh_options[@]}" "$api_compose" "$remote:/opt/loresuelvo/api/compose.yml.next"
-
-  ssh "${ssh_options[@]}" "$remote" 'bash -se' <<'REMOTE'
-install -m 0600 /etc/loresuelvo/api/api.env.next /etc/loresuelvo/api/api.env
-install -m 0640 /opt/loresuelvo/api/compose.yml.next /opt/loresuelvo/api/compose.yml
-rm -f /etc/loresuelvo/api/api.env.next /opt/loresuelvo/api/compose.yml.next
-REMOTE
-
-  printf '%s' "$GHCR_TOKEN" | ssh "${ssh_options[@]}" "$remote" \
-    docker login ghcr.io --username "$GHCR_USER" --password-stdin
-  ssh "${ssh_options[@]}" "$remote" bash -se -- "$image_ref" <<'REMOTE'
-export IMAGE_REF=$1
-docker compose -f /opt/loresuelvo/api/compose.yml pull api migrate
-REMOTE
+  prepare_application_node api "$host" "$runtime_env" api migrate
 done
 
 echo "Running the $environment migration"
@@ -136,12 +52,7 @@ REMOTE
 done
 
 for host in "${hosts[@]}"; do
-  ssh "${ssh_options[@]}" "deploy@$host" bash -se -- "$release_tag" "$image_ref" <<'REMOTE'
-marker=/opt/loresuelvo/api/CURRENT_RELEASE.next
-printf 'RELEASE_TAG=%s\nIMAGE_REF=%s\n' "$1" "$2" > "$marker"
-chmod 0640 "$marker"
-mv "$marker" /opt/loresuelvo/api/CURRENT_RELEASE
-REMOTE
+  record_release api "$host"
 done
 
 echo "$environment deployment completed successfully."

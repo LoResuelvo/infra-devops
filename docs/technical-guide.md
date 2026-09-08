@@ -76,6 +76,17 @@ roles se usan para los dos ambientes; solo cambia la clave pública suministrada
 
 ## Validación
 
+Los scripts de despliegue comparten validación de hosts y preparación SSH en
+`scripts/lib/deployment.sh`. API y Web App comparten validación de configuración,
+distribución y registro de releases en `scripts/lib/application-deployment.sh`;
+cada entrada conserva sus migraciones y chequeos de disponibilidad.
+Los dominios del gateway se declaran en `deploy/gateway/config/{staging,prod}.conf`.
+Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
+modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.
+La versión de configuración correspondiente es `2026-09-07.2`.
+Las comprobaciones locales del flujo se ejecutan con
+`bash scripts/tests/deployment.sh`, usando SSH/SCP simulados.
+
 Los tests mock de Terraform verifican cero réplicas por defecto, identidades
 estables, inventario y cloud-init YAML válido con SSH/Python/UFW y sin Docker ni
 `deploy`. La capa Ansible se valida con inventario, syntax-check y

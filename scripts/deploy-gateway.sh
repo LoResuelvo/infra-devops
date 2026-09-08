@@ -12,60 +12,44 @@ script_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 gateway_compose="$script_root/deploy/gateway/compose.yml"
 nginx_template="$script_root/deploy/gateway/nginx/default.conf.template"
 
-fail() {
-  echo "ERROR: $*" >&2
-  exit 1
-}
+source "$script_root/scripts/lib/deployment.sh"
 
-require_env() {
-  local name=$1
-  [[ -n "${!name-}" ]] || fail "Required variable $name is missing."
-}
-
-[[ "$environment" == "staging" || "$environment" == "production" ]] || \
-  fail "Environment must be staging or production."
-[[ -f "$gateway_compose" && -f "$nginx_template" ]] || \
-  fail "A gateway deployment artifact is missing."
-
+validate_environment "$environment"
+[[ -f "$gateway_compose" && -f "$nginx_template" ]] || fail "A gateway deployment artifact is missing."
 require_env DEPLOY_SSH_PRIVATE_KEY
 require_env CLOUDFLARE_ORIGIN_CERT
 require_env CLOUDFLARE_ORIGIN_KEY
+parse_hosts "$hosts_input"
 
-normalized_hosts=${hosts_input//,/ }
-normalized_hosts=${normalized_hosts//$'\n'/ }
-read -r -a hosts <<< "$normalized_hosts"
-[[ ${#hosts[@]} -gt 0 ]] || fail "At least one deployment host is required."
+config_name=staging
+[[ "$environment" != production ]] || config_name=prod
+gateway_config="$script_root/deploy/gateway/config/$config_name.conf"
+[[ -f "$gateway_config" ]] || fail "Gateway configuration is missing."
 
-declare -A seen_hosts=()
-for host in "${hosts[@]}"; do
-  [[ "$host" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ]] || fail "Deployment host is invalid."
-  [[ -z "${seen_hosts[$host]-}" ]] || fail "Deployment hosts must be unique."
-  seen_hosts[$host]=1
-  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-    printf '::add-mask::%s\n' "$host"
-  fi
+# Parse data without executing the configuration as shell code.
+declare -A server_names=()
+while IFS='=' read -r key value || [[ -n "$key" ]]; do
+  [[ -n "$key" && "$key" != \#* ]] || continue
+  case "$key" in
+    API_SERVER_NAMES|WEB_SERVER_NAMES|ADMIN_SERVER_NAMES) ;;
+    *) fail "Unknown gateway configuration key: $key" ;;
+  esac
+  [[ -z "${server_names[$key]-}" ]] || fail "Duplicate gateway configuration key: $key"
+  [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*(\ [A-Za-z0-9][A-Za-z0-9.-]*)*$ ]] || fail "Invalid gateway server names."
+  server_names[$key]=$value
+done < "$gateway_config"
+for key in API_SERVER_NAMES WEB_SERVER_NAMES ADMIN_SERVER_NAMES; do
+  [[ -n "${server_names[$key]-}" ]] || fail "Missing gateway configuration key: $key"
 done
+api_server_name=${server_names[API_SERVER_NAMES]}
+[[ "$api_server_name" != *" "* ]] || fail "Gateway readiness requires one API server name."
+web_server_names=${server_names[WEB_SERVER_NAMES]}
+admin_server_names=${server_names[ADMIN_SERVER_NAMES]}
 
-case "$environment" in
-  staging)
-    api_server_name="api-test.loresuelvo.com.ar"
-    web_server_names="test.loresuelvo.com.ar"
-    admin_server_names="gestion-test.loresuelvo.com.ar"
-    ;;
-  production)
-    api_server_name="api.loresuelvo.com.ar"
-    web_server_names="loresuelvo.com.ar www.loresuelvo.com.ar"
-    admin_server_names="gestion.loresuelvo.com.ar"
-    ;;
-esac
-
-work_dir=$(mktemp -d)
-ssh_key="$work_dir/deploy_key"
+prepare_ssh
 nginx_config="$work_dir/default.conf"
 origin_cert="$work_dir/origin.crt"
 origin_key="$work_dir/origin.key"
-trap 'rm -rf "$work_dir"' EXIT
-umask 077
 
 sed \
   -e "s/__API_SERVER_NAMES__/$api_server_name/g" \
@@ -74,23 +58,12 @@ sed \
   "$nginx_template" > "$nginx_config"
 ! grep -q '__[A-Z_]*__' "$nginx_config" || fail "Gateway template is incomplete."
 
-printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$ssh_key"
 printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$origin_cert"
 printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$origin_key"
-
-ssh_options=(
-  -i "$ssh_key"
-  -o BatchMode=yes
-  -o IdentitiesOnly=yes
-  -o StrictHostKeyChecking=accept-new
-  -o ConnectTimeout=15
-)
 
 for host in "${hosts[@]}"; do
   remote="deploy@$host"
   echo "Preparing $environment gateway node"
-  ssh "${ssh_options[@]}" "$remote" \
-    'mkdir -p /opt/loresuelvo/gateway/nginx && chmod 0750 /opt/loresuelvo/gateway/nginx'
   scp "${ssh_options[@]}" "$gateway_compose" "$remote:/opt/loresuelvo/gateway/compose.yml.next"
   scp "${ssh_options[@]}" "$nginx_config" "$remote:/opt/loresuelvo/gateway/nginx/default.conf.next"
   scp "${ssh_options[@]}" "$origin_cert" "$remote:/etc/loresuelvo/gateway/tls/origin.crt.next"

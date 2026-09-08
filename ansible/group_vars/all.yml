@@ -1,6 +1,6 @@
 ---
 loresuelvo_bootstrap_version: "2026-09-04.1"
-loresuelvo_configuration_version: "2026-09-07.1"
+loresuelvo_configuration_version: "2026-09-07.2"
 
 docker_apt_versions:
   docker-ce: "5:29.7.2-1~ubuntu.24.04~noble"
@@ -26,6 +26,8 @@ application_deploy_directories:
   - path: /opt/loresuelvo/api
     mode: "0750"
   - path: /opt/loresuelvo/gateway
+    mode: "0750"
+  - path: /opt/loresuelvo/gateway/nginx
     mode: "0750"
   - path: /opt/loresuelvo/webapp
     mode: "0750"
