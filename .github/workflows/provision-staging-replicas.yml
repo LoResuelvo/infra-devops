@@ -1,0 +1,21 @@
+name: Provision staging replicas
+
+on:
+  workflow_dispatch:
+    inputs:
+      desired-replica-count:
+        description: Total desired number of staging replicas
+        type: number
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  provision:
+    uses: ./.github/workflows/provision-replicas-internal.yml
+    with:
+      environment: staging
+      terraform-root: terraform/environments/staging/replicas
+      desired-replica-count: ${{ inputs.desired-replica-count }}

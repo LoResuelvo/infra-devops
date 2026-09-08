@@ -1,0 +1,21 @@
+name: Provision production replicas
+
+on:
+  workflow_dispatch:
+    inputs:
+      desired-replica-count:
+        description: Total desired number of production replicas
+        type: number
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  provision:
+    uses: ./.github/workflows/provision-replicas-internal.yml
+    with:
+      environment: production
+      terraform-root: terraform/environments/production/replicas
+      desired-replica-count: ${{ inputs.desired-replica-count }}
