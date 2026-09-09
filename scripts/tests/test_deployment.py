@@ -2,6 +2,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -13,12 +14,12 @@ SPEC.loader.exec_module(deployment)
 
 class DeploymentTests(unittest.TestCase):
     def test_inventory_and_exact_new_nodes(self):
-        value = [
-            {"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"},
-            {"role": "replica", "name": "staging-replica-01", "ipv4": "192.0.2.2"},
-            {"role": "replica", "name": "staging-replica-02", "ipv4": "192.0.2.3"},
-        ]
-        parsed = deployment.hosts(value)
+        value = {
+            "replica_names": {"value": ["staging-replica-01", "staging-replica-02"]},
+            "replica_ipv4": {"value": ["192.0.2.2", "192.0.2.3"]},
+        }
+        with mock.patch.dict("os.environ", {"TF_PRIMARY_INSTANCE_NAME": "staging-primary", "TF_PRIMARY_INSTANCE_IPV4": "192.0.2.1"}):
+            parsed = deployment.terraform_hosts(value)
         result = deployment.inventory(deployment.new_hosts(parsed, "staging", 1, 2), "ubuntu")
         hosts = result["all"]["children"]["application_nodes"]["hosts"]
         self.assertEqual(hosts, {"staging-replica-02": {"ansible_host": "192.0.2.3", "ansible_user": "ubuntu"}})
@@ -37,6 +38,10 @@ class DeploymentTests(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             deployment.new_hosts(deployment.hosts([{"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"}]), "staging", 1, 2)
+
+    def test_empty_state_uses_primary_from_infisical(self):
+        with mock.patch.dict("os.environ", {"TF_PRIMARY_INSTANCE_NAME": "staging-primary", "TF_PRIMARY_INSTANCE_IPV4": "192.0.2.1"}):
+            self.assertEqual(deployment.terraform_hosts({}), [{"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"}])
 
     def test_private_output(self):
         with tempfile.TemporaryDirectory() as directory:

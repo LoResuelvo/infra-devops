@@ -11,20 +11,42 @@ from pathlib import Path
 
 def hosts(value: object) -> list[dict[str, str]]:
     if not isinstance(value, list) or not value:
-        raise SystemExit("deployment_hosts must be a non-empty list")
+        raise SystemExit("Host inventory must be a non-empty list")
     result, names = [], set()
     for host in value:
         if not isinstance(host, dict) or set(host) != {"role", "name", "ipv4"}:
-            raise SystemExit("deployment_hosts contains an invalid object")
+            raise SystemExit("Host inventory contains an invalid object")
         if host["role"] not in {"primary", "replica"} or not host["name"] or host["name"] in names:
-            raise SystemExit("deployment_hosts contains invalid or duplicate metadata")
+            raise SystemExit("Host inventory contains invalid or duplicate metadata")
         names.add(host["name"])
         try:
             address = str(ipaddress.IPv4Address(host["ipv4"]))
         except ipaddress.AddressValueError as error:
-            raise SystemExit("deployment_hosts contains an invalid IPv4 address") from error
+            raise SystemExit("Host inventory contains an invalid IPv4 address") from error
         result.append({**host, "ipv4": address})
     return result
+
+
+def terraform_hosts(value: object) -> list[dict[str, str]]:
+    if not isinstance(value, dict):
+        raise SystemExit("Terraform outputs must be an object")
+
+    def output(name: str) -> object:
+        item = value.get(name)
+        if item is None:
+            return []
+        if not isinstance(item, dict) or "value" not in item:
+            raise SystemExit("Terraform replica outputs are invalid")
+        return item["value"]
+
+    names = output("replica_names")
+    addresses = output("replica_ipv4")
+    if not isinstance(names, list) or not isinstance(addresses, list) or len(names) != len(addresses):
+        raise SystemExit("Terraform replica outputs are invalid")
+    return hosts([
+        {"role": "primary", "name": os.environ.get("TF_PRIMARY_INSTANCE_NAME", ""), "ipv4": os.environ.get("TF_PRIMARY_INSTANCE_IPV4", "")},
+        *({"role": "replica", "name": name, "ipv4": address} for name, address in zip(names, addresses)),
+    ])
 
 
 def inventory(selected: list[dict[str, str]], user: str) -> dict[str, object]:
@@ -99,7 +121,7 @@ def main() -> None:
             raise SystemExit("DEPLOY_SSH_PUBLIC_KEYS_JSON must be a non-empty string list")
         write_private(args.output, {"deploy_ssh_public_keys": value})
         return
-    all_hosts = hosts(json.loads(args.hosts_json.read_text(encoding="utf-8")))
+    all_hosts = terraform_hosts(json.loads(args.hosts_json.read_text(encoding="utf-8")))
     if args.command == "new-inventory":
         all_hosts = new_hosts(all_hosts, args.environment, args.current, args.desired)
         user = args.user
