@@ -44,8 +44,10 @@ jobs:
           EXPECTED_COUNT: ${{ inputs.expected-current-count }}
           EXPECTED_FINGERPRINT: ${{ inputs.expected-state-fingerprint }}
         run: |
-          current_count=$(terraform -chdir="$TERRAFORM_ROOT" output -raw replica_count)
-          current_fingerprint=$(terraform -chdir="$TERRAFORM_ROOT" output -json | sha256sum | cut -d' ' -f1)
+          state_json=$(terraform -chdir="$TERRAFORM_ROOT" output -json)
+          current_count=0
+          [[ "$state_json" == '{}' ]] || current_count=$(terraform -chdir="$TERRAFORM_ROOT" output -raw replica_count)
+          current_fingerprint=$(printf '%s\n' "$state_json" | sha256sum | cut -d' ' -f1)
           mode=$(python3 scripts/provisioning/validate-replica-change.py state "$EXPECTED_COUNT" "$current_count" "$DESIRED_COUNT" "$EXPECTED_FINGERPRINT" "$current_fingerprint" '${{ github.run_attempt }}')
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
       - name: Recreate approved plan
