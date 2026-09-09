@@ -16,9 +16,7 @@ def replica_names(environment: str, start: int, end: int) -> list[str]:
 def validate_count(current: int, desired: int) -> None:
     if not 0 <= current <= 99 or not 0 <= desired <= 99:
         raise SystemExit("Replica counts must be between 0 and 99.")
-    if desired < current:
-        raise SystemExit("Reducing replica_count is not allowed by this workflow.")
-    print("unchanged" if desired == current else "grow")
+    print("unchanged" if desired == current else "grow" if desired > current else "shrink")
 
 
 def validate_context(environment: str, terraform_root: str) -> None:
@@ -38,7 +36,7 @@ def validate_state(
     if current_count == expected_count and current_fingerprint == expected_fingerprint:
         print("apply")
         return
-    if run_attempt > 1 and expected_count < desired_count == current_count:
+    if run_attempt > 1 and expected_count != desired_count == current_count:
         print("resume")
         return
     raise SystemExit("Terraform state changed after the reviewed plan.")
@@ -46,7 +44,8 @@ def validate_state(
 
 def validate_plan(path: Path, environment: str, current: int, desired: int) -> None:
     plan = json.loads(path.read_text(encoding="utf-8"))
-    expected_names = replica_names(environment, current, desired)
+    growing = desired > current
+    expected_names = replica_names(environment, current, desired) if growing else replica_names(environment, desired, current)
     expected_addresses = {
         address
         for name in expected_names
@@ -60,15 +59,16 @@ def validate_plan(path: Path, environment: str, current: int, desired: int) -> N
         actions = resource.get("change", {}).get("actions", [])
         if actions not in (["no-op"], ["read"]):
             changed[resource["address"]] = actions
-    if set(changed) != expected_addresses or any(actions != ["create"] for actions in changed.values()):
-        raise SystemExit("Terraform plan contains changes outside the expected new replicas.")
+    expected_actions = ["create"] if growing else ["delete"]
+    if set(changed) != expected_addresses or any(actions != expected_actions for actions in changed.values()):
+        raise SystemExit("Terraform plan contains changes outside the expected replica change.")
 
     print("### Replica plan")
     print()
     print(f"- Environment: `{environment}`")
     print(f"- Current replicas: `{current}`")
     print(f"- Desired replicas: `{desired}`")
-    print(f"- New replicas: `{len(expected_names)}`")
+    print(f"- Replicas to {'create' if growing else 'delete'}: `{len(expected_names)}`")
     for name in expected_names:
         if not re.fullmatch(r"(?:staging|production)-replica-[0-9]{2}", name):
             raise SystemExit("Generated replica name is invalid.")

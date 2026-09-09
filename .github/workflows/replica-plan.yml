@@ -65,7 +65,7 @@ jobs:
           echo "current-count=$current_count" >> "$GITHUB_OUTPUT"
           echo "decision=$decision" >> "$GITHUB_OUTPUT"
           terraform -chdir="$TERRAFORM_ROOT" output -json | sha256sum | sed 's/ .*//' | sed 's/^/state-fingerprint=/' >> "$GITHUB_OUTPUT"
-          [[ "$decision" == grow ]] || exit 0
+          [[ "$decision" != unchanged ]] || exit 0
           terraform -chdir="$TERRAFORM_ROOT" plan -input=false -out="$RUNNER_TEMP/replicas.tfplan" -var="replica_count=$DESIRED_COUNT" >"$RUNNER_TEMP/terraform-plan.log" 2>&1
           terraform -chdir="$TERRAFORM_ROOT" show -json "$RUNNER_TEMP/replicas.tfplan" > "$RUNNER_TEMP/plan.json"
           python3 scripts/provisioning/validate-replica-change.py plan "$RUNNER_TEMP/plan.json" "$ENVIRONMENT" "$current_count" "$DESIRED_COUNT" >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,4 @@
-name: Provision replicas
+name: Scale replicas
 on:
   workflow_dispatch:
     inputs:

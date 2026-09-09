@@ -125,3 +125,21 @@ run "incremental_growth_keeps_existing_replicas" {
     error_message = "Growing to three must keep the two stable keys and add one."
   }
 }
+
+run "shrink_keeps_first_replica_and_primary" {
+  command = plan
+
+  variables {
+    replica_count = 1
+  }
+
+  assert {
+    condition     = output.replica_names == tolist(["production-replica-01"])
+    error_message = "Shrinking from two replicas must keep replica-01."
+  }
+
+  assert {
+    condition     = tolist([for host in output.deployment_hosts : host.name]) == tolist(["production-primary-fixture", "production-replica-01"])
+    error_message = "The primary must remain a reference-only inventory entry after shrinking."
+  }
+}
