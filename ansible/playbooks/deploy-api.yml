@@ -13,7 +13,7 @@
           - image_ref is match('^ghcr\\.io/loresuelvo/api@sha256:[a-f0-9]{64}$')
           - release_tag is match('^v[0-9]+\\.[0-9]+\\.[0-9]+$')
           - deployment_mode in ['deploy', 'hydrate']
-          - lookup('file', config_file) is search('(?m)^ENVIRONMENT=' + environment_name + '$')
+          - lookup('file', playbook_dir + '/../../' + config_file) is search('(?m)^ENVIRONMENT=' + environment_name + '$')
           - lookup('file', secrets_file) is search('(?m)^DATABASE_URL=')
           - ghcr_user | length > 0
           - ghcr_token | length > 0
@@ -23,7 +23,7 @@
       ansible.builtin.copy:
         dest: /etc/loresuelvo/api/api.env
         mode: "0600"
-        content: "{{ lookup('file', config_file) }}\n{{ lookup('file', secrets_file) }}\n"
+        content: "{{ lookup('file', playbook_dir + '/../../' + config_file) }}\n{{ lookup('file', secrets_file) }}\n"
       no_log: true
     - name: Install API Compose file
       ansible.builtin.copy:

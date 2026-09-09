@@ -12,7 +12,7 @@
         that:
           - image_ref is match('^ghcr\\.io/loresuelvo/webapp@sha256:[a-f0-9]{64}$')
           - release_tag is match('^v[0-9]+\\.[0-9]+\\.[0-9]+$')
-          - lookup('file', config_file) is search('(?m)^APP_ENV=' + environment_name + '$')
+          - lookup('file', playbook_dir + '/../../' + config_file) is search('(?m)^APP_ENV=' + environment_name + '$')
           - lookup('file', secrets_file) is search('(?m)^AUTH0_CLIENT_ID=')
           - lookup('file', secrets_file) is search('(?m)^AUTH0_CLIENT_SECRET=')
           - lookup('file', secrets_file) is search('(?m)^AUTH0_SECRET=')
@@ -24,7 +24,7 @@
       ansible.builtin.copy:
         dest: /etc/loresuelvo/webapp/webapp.env
         mode: "0600"
-        content: "{{ lookup('file', config_file) }}\n{{ lookup('file', secrets_file) }}\n"
+        content: "{{ lookup('file', playbook_dir + '/../../' + config_file) }}\n{{ lookup('file', secrets_file) }}\n"
       no_log: true
     - name: Install Web App Compose file
       ansible.builtin.copy:
