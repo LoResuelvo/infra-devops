@@ -26,7 +26,7 @@ jobs:
         with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /deployments, include-imports: false, recursive: false}
       - name: Export Web App secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /webapp, include-imports: false, recursive: false, export-type: file, file-output-path: "${{ runner.temp }}/webapp.env"}
+        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /webapp, include-imports: false, recursive: false, export-type: file, file-output-path: /webapp.env}
       - name: Install Ansible
         run: |
           python3 -m venv "$RUNNER_TEMP/ansible"
@@ -44,6 +44,6 @@ jobs:
           terraform -chdir="terraform/environments/$ENVIRONMENT/replicas" output -json deployment_hosts > "$RUNNER_TEMP/hosts.json"
           python3 scripts/deployment.py inventory "$RUNNER_TEMP/hosts.json" "$RUNNER_TEMP/inventory.json"
           printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/deploy-key"
-          chmod 0600 "$RUNNER_TEMP/deploy-key" "$RUNNER_TEMP/webapp.env"
+          chmod 0600 "$RUNNER_TEMP/deploy-key" "$GITHUB_WORKSPACE/webapp.env"
       - name: Deploy sequentially
-        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-webapp.yml -e environment_name='${{ inputs.environment }}' -e image_ref='${{ inputs.image-ref }}' -e release_tag='${{ inputs.release-tag }}' -e config_file='${{ inputs.config-file }}' -e secrets_file="$RUNNER_TEMP/webapp.env"
+        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-webapp.yml -e environment_name='${{ inputs.environment }}' -e image_ref='${{ inputs.image-ref }}' -e release_tag='${{ inputs.release-tag }}' -e config_file='${{ inputs.config-file }}' -e secrets_file="$GITHUB_WORKSPACE/webapp.env"

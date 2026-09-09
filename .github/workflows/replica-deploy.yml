@@ -23,10 +23,10 @@ jobs:
         with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /deployments, include-imports: false, recursive: false}
       - name: Export API secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /api, include-imports: false, recursive: false, export-type: file, file-output-path: "${{ runner.temp }}/api.env"}
+        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /api, include-imports: false, recursive: false, export-type: file, file-output-path: /api.env}
       - name: Export Web App secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /webapp, include-imports: false, recursive: false, export-type: file, file-output-path: "${{ runner.temp }}/webapp.env"}
+        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /webapp, include-imports: false, recursive: false, export-type: file, file-output-path: /webapp.env}
       - name: Install Ansible
         run: |
           python3 -m venv "$RUNNER_TEMP/ansible"
@@ -47,7 +47,7 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/deploy-key"
           printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$RUNNER_TEMP/origin.crt"
           printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$RUNNER_TEMP/origin.key"
-          chmod 0600 "$RUNNER_TEMP"/{deploy-key,origin.crt,origin.key,api.env,webapp.env}
+          chmod 0600 "$RUNNER_TEMP"/{deploy-key,origin.crt,origin.key} "$GITHUB_WORKSPACE"/{api.env,webapp.env}
       - name: Resolve approved releases
         env: {GITHUB_TOKEN: "${{ github.token }}"}
         run: |
@@ -58,13 +58,13 @@ jobs:
         run: |
           source "$RUNNER_TEMP/releases.env"
           config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
-          ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-api.yml -e environment_name="$ENVIRONMENT" -e image_ref="$API_IMAGE_REF" -e release_tag="$API_RELEASE_TAG" -e config_file="deploy/api/config/$config.conf" -e secrets_file="$RUNNER_TEMP/api.env" -e deployment_mode=hydrate
+          ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-api.yml -e environment_name="$ENVIRONMENT" -e image_ref="$API_IMAGE_REF" -e release_tag="$API_RELEASE_TAG" -e config_file="deploy/api/config/$config.conf" -e secrets_file="$GITHUB_WORKSPACE/api.env" -e deployment_mode=hydrate
       - name: Hydrate Web App
         env: {ENVIRONMENT: "${{ inputs.environment }}"}
         run: |
           source "$RUNNER_TEMP/releases.env"
           config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
-          ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-webapp.yml -e environment_name="$ENVIRONMENT" -e image_ref="$WEBAPP_IMAGE_REF" -e release_tag="$WEBAPP_RELEASE_TAG" -e config_file="deploy/webapp/config/$config.conf" -e secrets_file="$RUNNER_TEMP/webapp.env"
+          ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-webapp.yml -e environment_name="$ENVIRONMENT" -e image_ref="$WEBAPP_IMAGE_REF" -e release_tag="$WEBAPP_RELEASE_TAG" -e config_file="deploy/webapp/config/$config.conf" -e secrets_file="$GITHUB_WORKSPACE/webapp.env"
       - name: Hydrate gateway
         env: {ENVIRONMENT: "${{ inputs.environment }}"}
         run: |
