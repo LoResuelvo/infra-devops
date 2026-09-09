@@ -41,6 +41,7 @@ jobs:
       - name: Generate private inventory
         env: {ENVIRONMENT: "${{ inputs.environment }}"}
         run: |
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL_S3="$R2_ENDPOINT"
           terraform -chdir="terraform/environments/$ENVIRONMENT/replicas" output -json deployment_hosts > "$RUNNER_TEMP/hosts.json"
           python3 scripts/deployment.py inventory "$RUNNER_TEMP/hosts.json" "$RUNNER_TEMP/inventory.json"
           printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/deploy-key"
