@@ -1,12 +1,16 @@
 ---
 - name: Prepare API on every node
   hosts: application_nodes
+  any_errors_fatal: true
   serial: 1
   gather_facts: false
   vars:
     ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
     ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
   pre_tasks:
+    - name: Check SSH connection and remote Python
+      ansible.builtin.ping:
+
     - name: Validate API deployment
       ansible.builtin.assert:
         that:
@@ -45,6 +49,7 @@
 
 - name: Migrate the database once
   hosts: application_nodes
+  any_errors_fatal: true
   gather_facts: false
   tasks:
     - name: Run API migrations
@@ -60,6 +65,7 @@
 
 - name: Deploy API sequentially
   hosts: application_nodes
+  any_errors_fatal: true
   serial: 1
   gather_facts: false
   tasks:

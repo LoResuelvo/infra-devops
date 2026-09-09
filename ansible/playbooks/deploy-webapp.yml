@@ -1,12 +1,16 @@
 ---
 - name: Deploy Web App sequentially
   hosts: application_nodes
+  any_errors_fatal: true
   serial: 1
   gather_facts: false
   vars:
     ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
     ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
   pre_tasks:
+    - name: Check SSH connection and remote Python
+      ansible.builtin.ping:
+
     - name: Validate Web App deployment
       ansible.builtin.assert:
         that:
