@@ -18,5 +18,6 @@ jobs:
     with:
       environment: ${{ inputs.environment }}
       terraform-root: terraform/environments/${{ inputs.environment }}/replicas
-      desired-replica-count: ${{ inputs.desired-replica-count }}
+      desired-replica-count: ${{ fromJSON(inputs.desired-replica-count) }}
+
     secrets: inherit
