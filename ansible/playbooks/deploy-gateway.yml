@@ -1,9 +1,13 @@
 ---
 - name: Deploy gateway sequentially
   hosts: application_nodes
+  any_errors_fatal: true
   serial: 1
   gather_facts: false
   pre_tasks:
+    - name: Check SSH connection and remote Python
+      ansible.builtin.ping:
+
     - name: Validate gateway deployment
       ansible.builtin.assert:
         that:
@@ -23,30 +27,46 @@
         - {src: "{{ origin_cert_file }}", dest: /etc/loresuelvo/gateway/tls/origin.crt, mode: "0640"}
         - {src: "{{ origin_key_file }}", dest: /etc/loresuelvo/gateway/tls/origin.key, mode: "0600"}
       no_log: true
+      register: gateway_files
     - name: Render nginx configuration
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../../deploy/gateway/nginx/default.conf.template"
         dest: /opt/loresuelvo/gateway/nginx/default.conf
         mode: "0640"
+      register: gateway_config
     - name: Start gateway
       community.docker.docker_compose_v2:
         project_src: /opt/loresuelvo/gateway
         pull: always
         services: [gateway]
         state: present
+        recreate: "{{ 'always' if gateway_files.changed or gateway_config.changed else 'auto' }}"
       environment:
         GATEWAY_IMAGE_REF: "{{ image_ref }}"
     - name: Wait for gateway readiness
-      ansible.builtin.uri:
-        url: https://127.0.0.1/__gateway_ready
-        validate_certs: false
-        status_code: 404
-        headers:
-          Host: "{{ api_server_names }}"
+      ansible.builtin.command:
+        argv:
+          - curl
+          - --silent
+          - --show-error
+          - --insecure
+          - --noproxy
+          - '*'
+          - --max-time
+          - '10'
+          - --resolve
+          - "{{ api_server_names }}:443:127.0.0.1"
+          - --output
+          - /dev/null
+          - --write-out
+          - '%{http_code}'
+          - "https://{{ api_server_names }}/__gateway_ready"
+      changed_when: false
       register: gateway_health
       retries: 30
       delay: 2
-      until: gateway_health.status == 404
+      until: gateway_health.rc == 0 and gateway_health.stdout == '404'
+      failed_when: gateway_health.rc != 0 or gateway_health.stdout != '404'
     - name: Record gateway release
       ansible.builtin.copy:
         dest: /opt/loresuelvo/gateway/CURRENT_RELEASE

@@ -6,14 +6,27 @@
     - name: Check API readiness
       ansible.builtin.uri:
         url: http://127.0.0.1:8080/health/ready
-    - name: Check Web App through gateway
-      ansible.builtin.uri:
-        url: "https://127.0.0.1/"
-        headers: {Host: "{{ web_server_name }}"}
-        validate_certs: false
-    - name: Check gateway API route
-      ansible.builtin.uri:
-        url: "https://127.0.0.1/__gateway_ready"
-        headers: {Host: "{{ api_server_name }}"}
-        validate_certs: false
-        status_code: 404
+    - name: Check HTTPS routes with the correct TLS server name
+      ansible.builtin.command:
+        argv:
+          - curl
+          - --silent
+          - --show-error
+          - --insecure
+          - --noproxy
+          - '*'
+          - --max-time
+          - '10'
+          - --resolve
+          - "{{ item.host }}:443:127.0.0.1"
+          - --output
+          - /dev/null
+          - --write-out
+          - '%{http_code}'
+          - "https://{{ item.host }}{{ item.path }}"
+      loop:
+        - {host: "{{ web_server_name }}", path: /, status: '200'}
+        - {host: "{{ api_server_name }}", path: /__gateway_ready, status: '404'}
+      changed_when: false
+      register: route_health
+      failed_when: route_health.rc != 0 or route_health.stdout != item.status
