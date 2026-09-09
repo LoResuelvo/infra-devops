@@ -15,6 +15,7 @@ output "replica_ipv4" {
 
 output "deployment_hosts" {
   description = "Primary VM followed by replicas, for deployment inventory generation."
+  sensitive   = true
   value = concat(
     [{
       role = "primary"

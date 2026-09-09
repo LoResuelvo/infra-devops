@@ -4,14 +4,18 @@ module "replica" {
   source = "../../../modules/application-node"
 
   instance_name           = each.key
-  region                  = var.region
-  image_name              = var.image_name
-  flavor_name             = var.flavor_name
+  region                  = local.region
+  image_name              = local.image_name
+  flavor_name             = local.flavor_name
   public_network_id       = var.public_network_id
   operator_ssh_public_key = var.operator_ssh_public_key
 }
 
 locals {
+  region      = "BHS5"
+  image_name  = "Ubuntu 24.04"
+  flavor_name = "d2-4"
+
   replicas = {
     for index in range(var.replica_count) :
     format("production-replica-%02d", index + 1) => {}

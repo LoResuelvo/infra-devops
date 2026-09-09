@@ -27,6 +27,8 @@ se derivan de forma estable (`staging-replica-01`,
 `production-replica-01`, etc.) y `for_each` garantiza que crecer solo agregue
 los índices faltantes. Los outputs ordenados son `replica_count`,
 `replica_names`, `replica_ipv4` y `deployment_hosts`.
+Región, imagen y flavor quedan versionados por ambiente; la primaria y el ID de
+red se inyectan desde Infisical y no se guardan en GitHub Variables.
 
 ## Validación segura
 

@@ -1,3 +1,3 @@
 provider "openstack" {
-  region = var.region
+  region = local.region
 }

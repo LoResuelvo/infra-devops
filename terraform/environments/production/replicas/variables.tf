@@ -1,19 +1,10 @@
-variable "environment" {
-  description = "Environment represented by this root."
-  type        = string
-
-  validation {
-    condition     = var.environment == "production"
-    error_message = "This root only accepts environment = production."
-  }
-}
-
 variable "primary_instance" {
   description = "Existing primary VM, referenced only for inventory outputs."
   type = object({
     name = string
     ipv4 = string
   })
+  sensitive = true
 
   validation {
     condition     = length(trimspace(var.primary_instance.name)) > 0 && can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$", var.primary_instance.ipv4)) && can(cidrhost("${var.primary_instance.ipv4}/32", 0))
@@ -32,29 +23,10 @@ variable "replica_count" {
   }
 }
 
-variable "region" {
-  description = "OVH Public Cloud region."
-  type        = string
-
-  validation {
-    condition     = length(trimspace(var.region)) > 0
-    error_message = "The region must not be empty."
-  }
-}
-
-variable "image_name" {
-  description = "OpenStack image name."
-  type        = string
-}
-
-variable "flavor_name" {
-  description = "OpenStack flavor name."
-  type        = string
-}
-
 variable "public_network_id" {
   description = "UUID of the OVH public network."
   type        = string
+  sensitive   = true
 
   validation {
     condition     = can(regex("^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$", var.public_network_id))

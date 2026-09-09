@@ -22,7 +22,7 @@ primary_instance (input, no administrado) ─┐
 replica_count ─ mapa derivado/for_each ─ módulo ─ VMs ────┘
 ```
 
-`primary_instance` contiene solo nombre e IPv4 y no alimenta recursos. El mapa
+`primary_instance` contiene solo nombre e IPv4, se inyecta desde Infisical y no alimenta recursos. El mapa
 `replica_count` genera claves deterministas terminadas en `-replica-NN`; el
 default cero crea cero recursos. El módulo registra la clave pública operativa,
 busca la imagen Ubuntu más reciente y crea la VM conectada a la red indicada.
@@ -37,10 +37,11 @@ conexiones activas. Cuando se incorpore Cloudflare Load Balancing, entre la
 aprobación y el apply se deberán deshabilitar los origins elegidos y esperar su
 drenaje.
 
-Cada root recibe `environment`, `primary_instance`, `replica_count`, región, imagen,
-flavor, red y `operator_ssh_public_key`. Los outputs exponen cantidad, nombres
+Cada root versiona su región, imagen y flavor. Recibe `primary_instance`,
+`public_network_id` y `operator_ssh_public_key` desde Infisical, además del
+`replica_count` solicitado por el workflow. Los outputs exponen cantidad, nombres
 e IPv4 ordenados, y `deployment_hosts`, con la primaria de referencia seguida
-por las réplicas ordenadas.
+por las réplicas ordenadas; este último está marcado como sensible.
 
 ## State y secretos
 

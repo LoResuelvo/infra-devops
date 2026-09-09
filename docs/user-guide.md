@@ -105,30 +105,25 @@ en el ambiente. El gateway se dispara indicando explícitamente
 `release-tag` e `image-ref`; API y Web App reciben esos datos desde sus
 workflows de release.
 
-Crear como variables de repositorio, por cada prefijo `STAGING` y
-`PRODUCTION`:
-
-```text
-<ENV>_TF_PRIMARY_INSTANCE_NAME
-<ENV>_TF_PRIMARY_INSTANCE_IPV4
-<ENV>_TF_REGION
-<ENV>_TF_IMAGE_NAME
-<ENV>_TF_FLAVOR_NAME
-<ENV>_TF_PUBLIC_NETWORK_ID
-```
-
 En Infisical, para cada ambiente, usar rutas consistentes:
 
 ```text
-/infrastructure  # R2, OpenStack y claves del operador
+/infrastructure  # R2, OpenStack, topología privada y claves del operador
 /deployments     # claves deploy, GHCR y certificado del gateway
 /api             # configuración privada de API
 /webapp          # configuración privada de Web App
 ```
 
-Crear ambos buckets R2 privados y el environment GitHub
-`production-infrastructure` con aprobación requerida. No guardar nombres,
-cantidades ni inventarios de hosts en Infisical.
+`/infrastructure` debe incluir `TF_PRIMARY_INSTANCE_NAME`,
+`TF_PRIMARY_INSTANCE_IPV4` y `TF_PUBLIC_NETWORK_ID`. Región, imagen y flavor
+están versionados en cada root. `terraform.tfvars.example` es únicamente la
+plantilla para crear un `terraform.tfvars` local ignorado; no contiene ni
+representa los valores efectivos de CI.
+
+No se requieren GitHub Actions Variables para Terraform. Crear ambos buckets
+R2 privados y el environment GitHub `production-infrastructure` con aprobación
+requerida. No guardar cantidades de réplicas ni inventarios derivados en
+Infisical.
 
 ## Prueba temporal en OVH
 

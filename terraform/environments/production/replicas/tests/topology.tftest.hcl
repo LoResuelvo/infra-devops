@@ -19,14 +19,10 @@ mock_provider "openstack" {
 }
 
 variables {
-  environment = "production"
   primary_instance = {
     name = "production-primary-fixture"
     ipv4 = "192.0.2.20"
   }
-  region                  = "BHS5"
-  image_name              = "Ubuntu 24.04"
-  flavor_name             = "d2-4"
   public_network_id       = "00000000-0000-0000-0000-000000000000"
   operator_ssh_public_key = "ssh-ed25519 AAAAoperator fixture"
 }
