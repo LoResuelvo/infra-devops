@@ -4,7 +4,7 @@ on:
     inputs:
       environment: {type: string, required: true}
       terraform-root: {type: string, required: true}
-      previous-replica-count: {type: number, required: true}
+      previous-replica-count: {type: string, required: true}
       desired-replica-count: {type: number, required: true}
 permissions: {contents: read, id-token: write}
 jobs:
