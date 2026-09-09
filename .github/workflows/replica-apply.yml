@@ -24,8 +24,6 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           TERRAFORM_ROOT: ${{ inputs.terraform-root }}
         run: |
-          echo "::add-mask::$TF_PRIMARY_INSTANCE_NAME"
-          echo "::add-mask::$TF_PRIMARY_INSTANCE_IPV4"
           echo "::add-mask::$TF_PUBLIC_NETWORK_ID"
           export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" \
                 AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" \
@@ -34,7 +32,6 @@ jobs:
             echo "AWS_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID"
             echo "AWS_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY"
             echo "AWS_ENDPOINT_URL_S3=$R2_ENDPOINT"
-            echo "TF_VAR_primary_instance={\"name\":\"$TF_PRIMARY_INSTANCE_NAME\",\"ipv4\":\"$TF_PRIMARY_INSTANCE_IPV4\"}"
             echo "TF_VAR_public_network_id=$TF_PUBLIC_NETWORK_ID"
             echo "TF_VAR_operator_ssh_public_key=$OPERATOR_SSH_PUBLIC_KEY"
           } >> "$GITHUB_ENV"

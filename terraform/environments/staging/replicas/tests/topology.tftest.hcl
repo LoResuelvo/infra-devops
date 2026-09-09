@@ -19,10 +19,6 @@ mock_provider "openstack" {
 }
 
 variables {
-  primary_instance = {
-    name = "staging-primary-fixture"
-    ipv4 = "192.0.2.10"
-  }
   public_network_id       = "00000000-0000-0000-0000-000000000000"
   operator_ssh_public_key = "ssh-ed25519 AAAAoperator fixture"
 }
@@ -74,11 +70,6 @@ run "zero_replicas_by_default" {
     condition     = output.replica_count == 0 && length(output.replica_names) == 0 && length(output.replica_ipv4) == 0
     error_message = "The default replica count must not create instances."
   }
-
-  assert {
-    condition     = output.deployment_hosts == [{ role = "primary", name = "staging-primary-fixture", ipv4 = "192.0.2.10" }]
-    error_message = "The primary VM must remain a reference-only inventory entry."
-  }
 }
 
 run "two_deterministic_replicas" {
@@ -91,16 +82,6 @@ run "two_deterministic_replicas" {
   assert {
     condition     = output.replica_names == tolist(["staging-replica-01", "staging-replica-02"])
     error_message = "Replica names must be deterministic and ordered."
-  }
-
-  assert {
-    condition     = tolist([for host in output.deployment_hosts : host.name]) == tolist(["staging-primary-fixture", "staging-replica-01", "staging-replica-02"])
-    error_message = "Deployment inventory must contain the primary followed by sorted replicas."
-  }
-
-  assert {
-    condition     = length(module.replica) == 2 && output.deployment_hosts[0].role == "primary"
-    error_message = "The primary must remain outside Terraform resources."
   }
 }
 
@@ -122,7 +103,7 @@ run "incremental_growth_keeps_existing_replicas" {
   }
 }
 
-run "shrink_keeps_first_replica_and_primary" {
+run "shrink_keeps_first_replica" {
   command = plan
 
   variables {
@@ -132,10 +113,5 @@ run "shrink_keeps_first_replica_and_primary" {
   assert {
     condition     = output.replica_names == tolist(["staging-replica-01"])
     error_message = "Shrinking from two replicas must keep replica-01."
-  }
-
-  assert {
-    condition     = tolist([for host in output.deployment_hosts : host.name]) == tolist(["staging-primary-fixture", "staging-replica-01"])
-    error_message = "The primary must remain a reference-only inventory entry after shrinking."
   }
 }

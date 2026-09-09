@@ -133,8 +133,8 @@ una VM y keypair, `terraform.tfvars` real y claves de deployment reales.
 1. Establecer temporalmente `replica_count = 1` en el root de staging.
 2. Generar y revisar un plan que agregue solo esa VM y su keypair; aplicar
    manualmente.
-3. Generar un inventario temporal desde `deployment_hosts` y ejecutar los
-   playbooks de configuración y verificación.
+3. Generar un inventario temporal con la primaria de Infisical y los outputs de
+   réplicas, y ejecutar los playbooks de configuración y verificación.
 4. Revisar el resultado del playbook de verificación.
 5. Quitar la réplica del mapa, revisar que el plan destruya solo la VM temporal
    y su keypair, aplicar y confirmar su ausencia en Terraform y OpenStack.

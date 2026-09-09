@@ -1,8 +1,3 @@
-primary_instance = {
-  name = "replace-with-existing-production-primary"
-  ipv4 = "192.0.2.20"
-}
-
 # The Actions workflow supplies this value. Keep zero for local validation.
 replica_count = 0
 

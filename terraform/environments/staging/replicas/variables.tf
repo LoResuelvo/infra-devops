@@ -1,17 +1,3 @@
-variable "primary_instance" {
-  description = "Existing primary VM, referenced only for inventory outputs."
-  type = object({
-    name = string
-    ipv4 = string
-  })
-  sensitive = true
-
-  validation {
-    condition     = length(trimspace(var.primary_instance.name)) > 0 && can(regex("^([0-9]{1,3}\\.){3}[0-9]{1,3}$", var.primary_instance.ipv4)) && can(cidrhost("${var.primary_instance.ipv4}/32", 0))
-    error_message = "The primary instance requires a name and a valid IPv4 address."
-  }
-}
-
 variable "replica_count" {
   description = "Total number of application replicas managed by this root."
   type        = number

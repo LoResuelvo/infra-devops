@@ -16,13 +16,6 @@
 `terraform/environments/production/replicas` son roots independientes. Cada
 uno mantiene su propia configuración, directorio de trabajo y state remoto.
 
-```text
-primary_instance (input, no administrado) ─┐
-                                           ├─ deployment_hosts
-replica_count ─ mapa derivado/for_each ─ módulo ─ VMs ────┘
-```
-
-`primary_instance` contiene solo nombre e IPv4, se inyecta desde Infisical y no alimenta recursos. El mapa
 `replica_count` genera claves deterministas terminadas en `-replica-NN`; el
 default cero crea cero recursos. El módulo registra la clave pública operativa,
 busca la imagen Ubuntu más reciente y crea la VM conectada a la red indicada.
@@ -37,11 +30,11 @@ conexiones activas. Cuando se incorpore Cloudflare Load Balancing, entre la
 aprobación y el apply se deberán deshabilitar los origins elegidos y esperar su
 drenaje.
 
-Cada root versiona su región, imagen y flavor. Recibe `primary_instance`,
-`public_network_id` y `operator_ssh_public_key` desde Infisical, además del
-`replica_count` solicitado por el workflow. Los outputs exponen cantidad, nombres
-e IPv4 ordenados, y `deployment_hosts`, con la primaria de referencia seguida
-por las réplicas ordenadas; este último está marcado como sensible.
+Cada root versiona su región, imagen y flavor. Recibe `public_network_id` y
+`operator_ssh_public_key` desde Infisical, además del `replica_count` solicitado
+por el workflow. Los outputs exponen cantidad, nombres e IPv4 ordenados. El
+inventario combina esos outputs con la primaria obtenida directamente de
+Infisical, incluida cuando el state todavía está vacío.
 
 ## State y secretos
 
@@ -88,8 +81,8 @@ roles se usan para los dos ambientes; solo cambia la clave pública suministrada
 ## Validación
 
 Los despliegues remotos usan los módulos de Docker Compose, copia, plantillas y
-healthchecks de Ansible. El inventario privado se genera desde
-`deployment_hosts`; no se publica como output ni artifact.
+healthchecks de Ansible. El inventario privado se genera durante el job y no se
+publica como output ni artifact.
 Los dominios del gateway se declaran en `deploy/gateway/config/{staging,prod}.conf`.
 Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
 modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.

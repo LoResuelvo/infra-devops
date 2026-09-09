@@ -26,9 +26,9 @@ Cada root recibe `replica_count`, cuyo valor por defecto es cero. Los nombres
 se derivan de forma estable (`staging-replica-01`,
 `production-replica-01`, etc.) y `for_each` garantiza que crecer solo agregue
 los índices faltantes. Los outputs ordenados son `replica_count`,
-`replica_names`, `replica_ipv4` y `deployment_hosts`.
-Región, imagen y flavor quedan versionados por ambiente; la primaria y el ID de
-red se inyectan desde Infisical y no se guardan en GitHub Variables.
+`replica_names` y `replica_ipv4`. Región, imagen y flavor quedan versionados
+por ambiente; la primaria y el ID de red se inyectan desde Infisical y no se
+guardan en GitHub Variables ni en el state de réplicas.
 
 ## Validación segura
 
@@ -70,9 +70,9 @@ Las versiones fijadas son `ansible-core 2.21.3`, `ansible-lint 26.8.0`,
 `community.general 13.3.0` y `community.docker 5.2.2`.
 
 El workflow de alta genera un inventario efímero dentro de `$RUNNER_TEMP`,
-espera SSH y cloud-init y ejecuta configuración y verificación. Los despliegues normales obtienen su
-inventario completo desde `deployment_hosts` mediante Terraform; Infisical ya
-no almacena `DEPLOY_HOSTS`.
+espera SSH y cloud-init y ejecuta configuración y verificación. Los despliegues
+combinan la primaria de Infisical con los outputs de réplicas de Terraform;
+Infisical no almacena `DEPLOY_HOSTS`.
 
 El workflow manual `Scale replicas` recibe el ambiente y la cantidad total deseada. Clasifica la
 ejecución como alta, baja o sin cambios; una baja elimina únicamente las réplicas con índices más
