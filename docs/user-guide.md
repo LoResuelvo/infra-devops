@@ -82,18 +82,20 @@ ansible/tests/check-idempotence.sh \
   ansible/vars/deploy-keys-staging.yml
 ```
 
-## Alta de réplicas desde GitHub Actions
+## Escalado de réplicas desde GitHub Actions
 
-Ejecutar `Provision replicas`, elegir staging o producción e indicar la
-cantidad total deseada. Una
-cantidad menor falla; una cantidad igual termina sin aplicar; una mayor crea y
-configura únicamente los índices faltantes. El apply de producción espera la
+Ejecutar `Scale replicas`, elegir staging o producción e indicar la cantidad
+total deseada. Una cantidad igual termina sin aplicar; una mayor crea, configura
+e hidrata únicamente los índices faltantes; una menor elimina primero los índices
+más altos y después verifica la primaria y todas las réplicas supervivientes. La
+baja es disruptiva para las conexiones activas y no ejecuta configuración,
+deploys ni migraciones. El apply de producción espera la
 aprobación de `production-infrastructure`; state y releases se vuelven a
 validar antes de aplicar y desplegar.
 
 Si Terraform terminó pero Ansible o una aplicación fallaron, usar **Re-run
-failed jobs** sobre el mismo run. Un `run_attempt` posterior retoma únicamente
-las réplicas creadas por el intento original. Una ejecución manual nueva con la
+failed jobs** sobre el mismo run. Un `run_attempt` posterior retoma una alta o
+baja ya aplicada desde la fase posterior correspondiente. Una ejecución manual nueva con la
 misma cantidad se considera sin cambios y no reconfigura nodos.
 
 Cada deploy exitoso publica en su GitHub Deployment el tag y la referencia por

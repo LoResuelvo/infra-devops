@@ -72,8 +72,10 @@ espera SSH y cloud-init y ejecuta configuración y verificación. Los despliegue
 inventario completo desde `deployment_hosts` mediante Terraform; Infisical ya
 no almacena `DEPLOY_HOSTS`.
 
-El workflow manual `Provision replicas` recibe el ambiente y la cantidad total deseada, rechaza
-reducciones y termina sin cambios cuando coincide con el state. Producción
+El workflow manual `Scale replicas` recibe el ambiente y la cantidad total deseada. Clasifica la
+ejecución como alta, baja o sin cambios; una baja elimina únicamente las réplicas con índices más
+altos y verifica el inventario superviviente completo, sin configurar ni desplegar aplicaciones.
+Producción
 presenta el plan antes de requerir aprobación en `production-infrastructure`.
 Las imágenes se resuelven desde los últimos GitHub Deployments exitosos del
 ambiente y siempre se despliegan por digest.

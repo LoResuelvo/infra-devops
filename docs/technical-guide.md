@@ -29,6 +29,14 @@ busca la imagen Ubuntu más reciente y crea la VM conectada a la red indicada.
 El lifecycle ignora cambios posteriores de `image_id`, por lo que una imagen
 nueva solo afecta nodos nuevos.
 
+El escalado hacia abajo usa el mismo `replica_count`: Terraform elimina VM y
+keypair de los índices más altos, nunca la primaria, y el workflow rechaza
+reemplazos o cualquier cambio fuera de ese conjunto. No hay drenaje porque este
+repositorio todavía no administra un balanceador; por eso la baja corta las
+conexiones activas. Cuando se incorpore Cloudflare Load Balancing, entre la
+aprobación y el apply se deberán deshabilitar los origins elegidos y esperar su
+drenaje.
+
 Cada root recibe `environment`, `primary_instance`, `replica_count`, región, imagen,
 flavor, red y `operator_ssh_public_key`. Los outputs exponen cantidad, nombres
 e IPv4 ordenados, y `deployment_hosts`, con la primaria de referencia seguida
