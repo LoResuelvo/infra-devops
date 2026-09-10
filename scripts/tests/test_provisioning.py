@@ -67,6 +67,15 @@ class ProvisioningTests(unittest.TestCase):
         with patch.object(releases, "request_json", side_effect=responses):
             self.assertEqual(releases.latest_successful("api", "staging", "https://api.test"), ("v1.2.3", image))
 
+    def test_scaling_orders_activation_and_drain_around_vm_changes(self):
+        workflow = Path(".github/workflows/provision-replicas-internal.yml").read_text()
+        self.assertIn("needs: [plan, verify-grow]", workflow)
+        self.assertIn("needs: [plan, drain-shrink]", workflow)
+        self.assertIn("needs: [plan, apply-shrink]", workflow)
+
+        sync = Path(".github/workflows/sync-load-balancer.yml").read_text()
+        self.assertLess(sync.index("disabled_at"), sync.index('sleep "$(terraform'))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,0 +1,26 @@
+name: Initialize load balancer
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment whose deployed nodes should enter the pool
+        type: choice
+        required: true
+        options: [staging, production]
+      active-replica-count:
+        description: Number of already deployed replicas
+        type: number
+        required: true
+
+permissions: {contents: read, id-token: write}
+
+jobs:
+  sync:
+    name: Create or synchronize Cloudflare resources
+    uses: ./.github/workflows/sync-load-balancer.yml
+    with:
+      environment: ${{ inputs.environment }}
+      replicas-terraform-root: terraform/environments/${{ inputs.environment }}/replicas
+      active-replica-count: ${{ fromJSON(inputs.active-replica-count) }}
+      mode: activate
+    secrets: inherit

@@ -5,21 +5,27 @@ on:
       environment: {type: string, required: true}
       terraform-root: {type: string, required: true}
       desired-replica-count: {type: number, required: true}
+
 permissions: {contents: read, id-token: write, deployments: read}
+
 concurrency:
   group: provision-replicas-${{ inputs.environment }}
   cancel-in-progress: false
+
 jobs:
   plan:
+    name: Plan replica change
     uses: ./.github/workflows/replica-plan.yml
     with:
       environment: ${{ inputs.environment }}
       terraform-root: ${{ inputs.terraform-root }}
       desired-replica-count: ${{ inputs.desired-replica-count }}
     secrets: inherit
-  apply:
+
+  apply-grow:
+    name: Create new VMs
     needs: plan
-    if: needs.plan.outputs.decision != 'unchanged'
+    if: needs.plan.outputs.decision == 'grow'
     uses: ./.github/workflows/replica-apply.yml
     with:
       environment: ${{ inputs.environment }}
@@ -27,8 +33,10 @@ jobs:
       desired-replica-count: ${{ inputs.desired-replica-count }}
       expected-current-count: ${{ needs.plan.outputs.current-count }}
     secrets: inherit
+
   configure:
-    needs: [plan, apply]
+    name: Configure new VMs
+    needs: [plan, apply-grow]
     if: needs.plan.outputs.decision == 'grow'
     uses: ./.github/workflows/replica-configure.yml
     with:
@@ -37,7 +45,9 @@ jobs:
       desired-replica-count: ${{ inputs.desired-replica-count }}
       previous-replica-count: ${{ needs.plan.outputs.current-count }}
     secrets: inherit
+
   deploy:
+    name: Deploy applications and gateway
     needs: [plan, configure]
     if: needs.plan.outputs.decision == 'grow'
     uses: ./.github/workflows/replica-deploy.yml
@@ -47,7 +57,9 @@ jobs:
       desired-replica-count: ${{ inputs.desired-replica-count }}
       previous-replica-count: ${{ needs.plan.outputs.current-count }}
     secrets: inherit
+
   verify-grow:
+    name: Verify deployments locally
     needs: [plan, deploy]
     if: needs.plan.outputs.decision == 'grow'
     uses: ./.github/workflows/replica-verify.yml
@@ -55,8 +67,58 @@ jobs:
       environment: ${{ inputs.environment }}
       terraform-root: ${{ inputs.terraform-root }}
     secrets: inherit
+
+  activate-grow:
+    name: Add verified origins to Cloudflare
+    needs: [plan, verify-grow]
+    if: needs.plan.outputs.decision == 'grow'
+    uses: ./.github/workflows/sync-load-balancer.yml
+    with:
+      environment: ${{ inputs.environment }}
+      replicas-terraform-root: ${{ inputs.terraform-root }}
+      active-replica-count: ${{ inputs.desired-replica-count }}
+      mode: activate
+    secrets: inherit
+
+  drain-shrink:
+    name: Disable and drain origins in Cloudflare
+    needs: plan
+    if: needs.plan.outputs.decision == 'shrink'
+    uses: ./.github/workflows/sync-load-balancer.yml
+    with:
+      environment: ${{ inputs.environment }}
+      replicas-terraform-root: ${{ inputs.terraform-root }}
+      active-replica-count: ${{ inputs.desired-replica-count }}
+      mode: drain
+    secrets: inherit
+
+  apply-shrink:
+    name: Destroy drained VMs
+    needs: [plan, drain-shrink]
+    if: needs.plan.outputs.decision == 'shrink'
+    uses: ./.github/workflows/replica-apply.yml
+    with:
+      environment: ${{ inputs.environment }}
+      terraform-root: ${{ inputs.terraform-root }}
+      desired-replica-count: ${{ inputs.desired-replica-count }}
+      expected-current-count: ${{ needs.plan.outputs.current-count }}
+    secrets: inherit
+
+  remove-shrunk-origins:
+    name: Remove destroyed origins from Cloudflare
+    needs: [plan, apply-shrink]
+    if: needs.plan.outputs.decision == 'shrink'
+    uses: ./.github/workflows/sync-load-balancer.yml
+    with:
+      environment: ${{ inputs.environment }}
+      replicas-terraform-root: ${{ inputs.terraform-root }}
+      active-replica-count: ${{ inputs.desired-replica-count }}
+      mode: remove
+    secrets: inherit
+
   verify-shrink:
-    needs: [plan, apply]
+    name: Verify surviving deployments
+    needs: [plan, remove-shrunk-origins]
     if: needs.plan.outputs.decision == 'shrink'
     uses: ./.github/workflows/replica-verify.yml
     with:

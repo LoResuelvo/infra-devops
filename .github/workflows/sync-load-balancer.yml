@@ -1,0 +1,87 @@
+name: Sync Cloudflare load balancer
+on:
+  workflow_call:
+    inputs:
+      environment: {type: string, required: true}
+      replicas-terraform-root: {type: string, required: true}
+      active-replica-count: {type: number, required: true}
+      mode: {type: string, required: true}
+
+permissions: {contents: read, id-token: write}
+
+concurrency:
+  group: cloudflare-load-balancer-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: ${{ inputs.mode }} Cloudflare origins
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment == 'production' && 'production-infrastructure' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: hashicorp/setup-terraform@v3.1.2
+        with: {terraform_version: 1.16.1, terraform_wrapper: false}
+
+      - name: Fetch infrastructure and Cloudflare secrets
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /infrastructure
+          include-imports: false
+          recursive: false
+
+      - name: Validate mode
+        env: {MODE: "${{ inputs.mode }}"}
+        run: '[[ "$MODE" == activate || "$MODE" == drain || "$MODE" == remove ]]'
+
+      - name: Build ordered origin set
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          REPLICAS_ROOT: ${{ inputs.replicas-terraform-root }}
+          ACTIVE_REPLICAS: ${{ inputs.active-replica-count }}
+        run: |
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL_S3="$R2_ENDPOINT"
+          terraform -chdir="$REPLICAS_ROOT" init -input=false -reconfigure -backend-config="bucket=loresuelvo-terraform-state-$ENVIRONMENT" >/dev/null
+          terraform -chdir="$REPLICAS_ROOT" output -json > "$RUNNER_TEMP/replicas.json"
+          python3 scripts/deployment.py cloudflare-origins "$RUNNER_TEMP/replicas.json" "$RUNNER_TEMP/load-balancer.auto.tfvars.json" "$ENVIRONMENT" "$ACTIVE_REPLICAS"
+
+      - name: Apply Cloudflare topology
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          LOAD_BALANCER_ROOT: terraform/environments/${{ inputs.environment }}/load-balancer
+        run: |
+          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_ENDPOINT_URL_S3="$R2_ENDPOINT"
+          export TF_VAR_cloudflare_account_id="$CLOUDFLARE_ACCOUNT_ID" TF_VAR_cloudflare_zone_id="$CLOUDFLARE_ZONE_ID"
+          cp "$RUNNER_TEMP/load-balancer.auto.tfvars.json" "$LOAD_BALANCER_ROOT/load-balancer.auto.tfvars.json"
+          terraform -chdir="$LOAD_BALANCER_ROOT" init -input=false -reconfigure -backend-config="bucket=loresuelvo-terraform-state-$ENVIRONMENT" >/dev/null
+          terraform -chdir="$LOAD_BALANCER_ROOT" apply -input=false -auto-approve
+
+      - name: Confirm disabled origins and drain
+        if: inputs.mode == 'drain'
+        env:
+          LOAD_BALANCER_ROOT: terraform/environments/${{ inputs.environment }}/load-balancer
+        run: |
+          terraform -chdir="$LOAD_BALANCER_ROOT" output -json origins > "$RUNNER_TEMP/origins.json"
+          jq -e '[.[] | select(.enabled == false)] | length > 0 and all(.[]; (.disabled_at // "") != "")' "$RUNNER_TEMP/origins.json" >/dev/null
+          sleep "$(terraform -chdir="$LOAD_BALANCER_ROOT" output -raw drain_seconds)"
+
+      - name: Wait for enabled origins to become healthy
+        if: inputs.mode == 'activate'
+        env:
+          LOAD_BALANCER_ROOT: terraform/environments/${{ inputs.environment }}/load-balancer
+        run: |
+          pool_id=$(terraform -chdir="$LOAD_BALANCER_ROOT" output -raw pool_id)
+          for attempt in $(seq 1 30); do
+            response=$(curl --silent --show-error --fail --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/load_balancers/pools/$pool_id")
+            if jq -e '.success and ([.result.origins[] | select(.enabled) | .healthy] | length > 0 and all(.[]; . == true))' <<<"$response" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Enabled Cloudflare origins did not become healthy" >&2
+          exit 1
