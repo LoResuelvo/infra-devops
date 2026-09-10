@@ -5,7 +5,7 @@ on:
       environment: {type: string, required: true}
       terraform-root: {type: string, required: true}
       desired-replica-count: {type: number, required: true}
-permissions: {contents: read, id-token: write}
+permissions: {contents: read, id-token: write, deployments: read}
 concurrency:
   group: provision-replicas-${{ inputs.environment }}
   cancel-in-progress: false

@@ -10,7 +10,7 @@ on:
       decision: {value: "${{ jobs.plan.outputs.decision }}"}
       state-fingerprint: {value: "${{ jobs.plan.outputs.state-fingerprint }}"}
       release-fingerprint: {value: "${{ jobs.plan.outputs.release-fingerprint }}"}
-permissions: {contents: read, id-token: write}
+permissions: {contents: read, id-token: write, deployments: read}
 jobs:
   plan:
     runs-on: ubuntu-latest

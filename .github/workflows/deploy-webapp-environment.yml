@@ -6,7 +6,7 @@ on:
       config-file: {type: string, required: true}
       image-ref: {type: string, required: true}
       release-tag: {type: string, required: true}
-permissions: {contents: read, id-token: write}
+permissions: {contents: read, id-token: write, deployments: write}
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -48,3 +48,16 @@ jobs:
           chmod 0600 "$RUNNER_TEMP/deploy-key" "$GITHUB_WORKSPACE/webapp.env"
       - name: Deploy sequentially
         run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-webapp.yml -e environment_name='${{ inputs.environment }}' -e image_ref='${{ inputs.image-ref }}' -e release_tag='${{ inputs.release-tag }}' -e config_file='${{ inputs.config-file }}' -e secrets_file="$GITHUB_WORKSPACE/webapp.env"
+  publish-deployment-metadata:
+    needs: deploy
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: {repository: LoResuelvo/infra-devops, ref: main}
+      - name: Publish release metadata
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOYMENT_URL: https://github.com/LoResuelvo/loresuelvo-webapp/pkgs/container/webapp#release_tag=${{ inputs.release-tag }}&image_ref=${{ inputs.image-ref }}
+        run: python3 scripts/provisioning/publish-deployment-metadata.py
