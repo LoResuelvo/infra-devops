@@ -45,7 +45,7 @@ class DeploymentTests(unittest.TestCase):
 
     def test_cloudflare_origins_preserve_manual_endpoints_and_disable_only_high_replicas(self):
         hosts = deployment.hosts([
-            {"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"},
+            {"role": "primary", "name": "existing-staging-instance", "ipv4": "192.0.2.1"},
             {"role": "replica", "name": "staging-replica-01", "ipv4": "192.0.2.2"},
             {"role": "replica", "name": "staging-replica-02", "ipv4": "192.0.2.3"},
         ])

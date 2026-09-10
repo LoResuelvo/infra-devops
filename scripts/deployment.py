@@ -78,8 +78,8 @@ def cloudflare_origins(pool: object, all_hosts: list[dict[str, str]], environmen
 
     primary_name = f"{environment}-primary"
     primary = next((host for host in all_hosts if host["role"] == "primary"), None)
-    if primary is None or primary["name"] != primary_name:
-        raise SystemExit(f"TF_PRIMARY_INSTANCE_NAME must be {primary_name}")
+    if primary is None:
+        raise SystemExit("Primary instance is missing from the inventory")
 
     managed = re.compile(rf"{re.escape(environment)}-replica-\d{{2}}")
     writable = ("name", "address", "enabled", "weight", "header", "virtual_network_id")
