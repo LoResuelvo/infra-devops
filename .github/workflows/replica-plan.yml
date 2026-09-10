@@ -8,8 +8,6 @@ on:
     outputs:
       current-count: {value: "${{ jobs.plan.outputs.current-count }}"}
       decision: {value: "${{ jobs.plan.outputs.decision }}"}
-      state-fingerprint: {value: "${{ jobs.plan.outputs.state-fingerprint }}"}
-      release-fingerprint: {value: "${{ jobs.plan.outputs.release-fingerprint }}"}
 permissions: {contents: read, id-token: write, deployments: read}
 jobs:
   plan:
@@ -17,8 +15,6 @@ jobs:
     outputs:
       current-count: ${{ steps.plan.outputs.current-count }}
       decision: ${{ steps.plan.outputs.decision }}
-      state-fingerprint: ${{ steps.plan.outputs.state-fingerprint }}
-      release-fingerprint: ${{ steps.releases.outputs.release-fingerprint }}
     steps:
       - uses: actions/checkout@v6
       - uses: hashicorp/setup-terraform@v3.1.2
@@ -59,7 +55,8 @@ jobs:
           decision=$(python3 scripts/provisioning/validate-replica-change.py count "$current_count" "$DESIRED_COUNT")
           echo "current-count=$current_count" >> "$GITHUB_OUTPUT"
           echo "decision=$decision" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$state_json" | sha256sum | sed 's/ .*//' | sed 's/^/state-fingerprint=/' >> "$GITHUB_OUTPUT"
+          state_fingerprint=$(printf '%s\n' "$state_json" | sha256sum | cut -d' ' -f1)
+          printf 'state-fingerprint=%s\n' "$state_fingerprint" > "$RUNNER_TEMP/scale-metadata.env"
           [[ "$decision" != unchanged ]] || exit 0
           terraform -chdir="$TERRAFORM_ROOT" plan -input=false -out="$RUNNER_TEMP/replicas.tfplan" -var="replica_count=$DESIRED_COUNT" >"$RUNNER_TEMP/terraform-plan.log" 2>&1
           terraform -chdir="$TERRAFORM_ROOT" show -json "$RUNNER_TEMP/replicas.tfplan" > "$RUNNER_TEMP/plan.json"
@@ -70,4 +67,13 @@ jobs:
         env: {GITHUB_TOKEN: "${{ github.token }}"}
         run: |
           python3 scripts/provisioning/resolve-deployed-images.py '${{ inputs.environment }}' "$RUNNER_TEMP/releases.env"
-          sha256sum "$RUNNER_TEMP/releases.env" | sed 's/ .*//' | sed 's/^/release-fingerprint=/' >> "$GITHUB_OUTPUT"
+          release_fingerprint=$(sha256sum "$RUNNER_TEMP/releases.env" | cut -d' ' -f1)
+          printf 'release-fingerprint=%s\n' "$release_fingerprint" >> "$RUNNER_TEMP/scale-metadata.env"
+      - name: Upload scale metadata
+        if: steps.plan.outputs.decision != 'unchanged'
+        uses: actions/upload-artifact@v4
+        with:
+          name: replica-scale-metadata-${{ github.run_id }}
+          path: ${{ runner.temp }}/scale-metadata.env
+          if-no-files-found: error
+          overwrite: true

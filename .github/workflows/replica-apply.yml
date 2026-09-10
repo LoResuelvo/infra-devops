@@ -6,7 +6,6 @@ on:
       terraform-root: {type: string, required: true}
       desired-replica-count: {type: number, required: true}
       expected-current-count: {type: string, required: true}
-      expected-state-fingerprint: {type: string, required: true}
 permissions: {contents: read, id-token: write}
 jobs:
   apply:
@@ -36,14 +35,19 @@ jobs:
             echo "TF_VAR_operator_ssh_public_key=$OPERATOR_SSH_PUBLIC_KEY"
           } >> "$GITHUB_ENV"
           terraform -chdir="$TERRAFORM_ROOT" init -input=false -reconfigure -backend-config="bucket=loresuelvo-terraform-state-$ENVIRONMENT" >/dev/null
+      - name: Download scale metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: replica-scale-metadata-${{ github.run_id }}
+          path: ${{ runner.temp }}/scale-metadata
       - name: Revalidate state
         id: state
         env:
           TERRAFORM_ROOT: ${{ inputs.terraform-root }}
           DESIRED_COUNT: ${{ inputs.desired-replica-count }}
           EXPECTED_COUNT: ${{ inputs.expected-current-count }}
-          EXPECTED_FINGERPRINT: ${{ inputs.expected-state-fingerprint }}
         run: |
+          EXPECTED_FINGERPRINT=$(sed -n 's/^state-fingerprint=//p' "$RUNNER_TEMP/scale-metadata/scale-metadata.env")
           state_json=$(terraform -chdir="$TERRAFORM_ROOT" output -json)
           current_count=0
           [[ "$state_json" == '{}' ]] || current_count=$(terraform -chdir="$TERRAFORM_ROOT" output -raw replica_count)

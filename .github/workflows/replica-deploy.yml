@@ -6,7 +6,6 @@ on:
       terraform-root: {type: string, required: true}
       previous-replica-count: {type: string, required: true}
       desired-replica-count: {type: number, required: true}
-      release-fingerprint: {type: string, required: true}
 permissions: {contents: read, id-token: write}
 jobs:
   deploy:
@@ -48,11 +47,18 @@ jobs:
           printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$RUNNER_TEMP/origin.crt"
           printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$RUNNER_TEMP/origin.key"
           chmod 0600 "$RUNNER_TEMP"/{deploy-key,origin.crt,origin.key} "$GITHUB_WORKSPACE"/{api.env,webapp.env}
+      - name: Download scale metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: replica-scale-metadata-${{ github.run_id }}
+          path: ${{ runner.temp }}/scale-metadata
       - name: Resolve approved releases
         env: {GITHUB_TOKEN: "${{ github.token }}"}
         run: |
           python3 scripts/provisioning/resolve-deployed-images.py '${{ inputs.environment }}' "$RUNNER_TEMP/releases.env"
-          [[ "$(sha256sum "$RUNNER_TEMP/releases.env" | cut -d' ' -f1)" == '${{ inputs.release-fingerprint }}' ]]
+          release_fingerprint=$(sha256sum "$RUNNER_TEMP/releases.env" | cut -d' ' -f1)
+          expected_release_fingerprint=$(sed -n 's/^release-fingerprint=//p' "$RUNNER_TEMP/scale-metadata/scale-metadata.env")
+          [[ "$release_fingerprint" == "$expected_release_fingerprint" ]]
       - name: Hydrate API
         env: {ENVIRONMENT: "${{ inputs.environment }}"}
         run: |

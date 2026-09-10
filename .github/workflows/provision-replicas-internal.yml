@@ -26,7 +26,6 @@ jobs:
       terraform-root: ${{ inputs.terraform-root }}
       desired-replica-count: ${{ inputs.desired-replica-count }}
       expected-current-count: ${{ needs.plan.outputs.current-count }}
-      expected-state-fingerprint: ${{ needs.plan.outputs.state-fingerprint }}
     secrets: inherit
   configure:
     needs: [plan, apply]
@@ -47,7 +46,6 @@ jobs:
       terraform-root: ${{ inputs.terraform-root }}
       desired-replica-count: ${{ inputs.desired-replica-count }}
       previous-replica-count: ${{ needs.plan.outputs.current-count }}
-      release-fingerprint: ${{ needs.plan.outputs.release-fingerprint }}
     secrets: inherit
   verify-grow:
     needs: [plan, deploy]
