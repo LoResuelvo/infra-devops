@@ -25,7 +25,7 @@ El lifecycle ignora cambios posteriores de `image_id`, por lo que una imagen
 nueva solo afecta nodos nuevos.
 
 El escalado hacia abajo deshabilita primero los índices más altos en el pool,
-confirma que Cloudflare informó `disabled_at`, espera 60 segundos, destruye VM
+confirma que Cloudflare los informa deshabilitados, espera 60 segundos, destruye VM
 y keypair y elimina finalmente los endpoints del pool. Esta ventana corta puede
 interrumpir sesiones HTTP o WebSockets que sigan activas.
 

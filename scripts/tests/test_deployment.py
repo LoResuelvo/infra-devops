@@ -43,7 +43,7 @@ class DeploymentTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {"TF_PRIMARY_INSTANCE_NAME": "staging-primary", "TF_PRIMARY_INSTANCE_IPV4": "192.0.2.1"}):
             self.assertEqual(deployment.terraform_hosts({}), [{"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"}])
 
-    def test_cloudflare_origins_preserve_manual_endpoints_and_disable_only_high_replicas(self):
+    def test_cloudflare_origins_do_not_create_an_absent_replica_while_draining(self):
         hosts = deployment.hosts([
             {"role": "primary", "name": "existing-staging-instance", "ipv4": "192.0.2.1"},
             {"role": "replica", "name": "staging-replica-01", "ipv4": "192.0.2.2"},
@@ -58,7 +58,6 @@ class DeploymentTests(unittest.TestCase):
             {"name": "staging-primary", "address": "192.0.2.1", "enabled": True, "weight": 1},
             {"name": "manual-fallback", "address": "192.0.2.10", "enabled": False, "weight": 0.5},
             {"name": "staging-replica-01", "address": "192.0.2.2", "enabled": True, "weight": 1},
-            {"name": "staging-replica-02", "address": "192.0.2.3", "enabled": False, "weight": 1},
         ]})
 
     def test_private_output(self):

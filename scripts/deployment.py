@@ -83,6 +83,10 @@ def cloudflare_origins(pool: object, all_hosts: list[dict[str, str]], environmen
 
     managed = re.compile(rf"{re.escape(environment)}-replica-\d{{2}}")
     writable = ("name", "address", "enabled", "weight", "header", "virtual_network_id")
+    existing_replicas = {
+        origin["name"] for origin in pool["origins"]
+        if managed.fullmatch(origin["name"])
+    }
     preserved = [
         {key: origin[key] for key in writable if key in origin}
         for origin in pool["origins"]
@@ -102,6 +106,7 @@ def cloudflare_origins(pool: object, all_hosts: list[dict[str, str]], environmen
         *(
             {"name": host["name"], "address": host["ipv4"], "enabled": mode != "drain" or host["name"] in active, "weight": 1}
             for host in replicas
+            if mode != "drain" or host["name"] in active or host["name"] in existing_replicas
         ),
     ]}
 

@@ -78,7 +78,7 @@ Infisical no almacena `DEPLOY_HOSTS`.
 El workflow manual `Scale replicas` recibe el ambiente y la cantidad total
 deseada. En una alta configura, despliega y verifica cada nodo antes de
 habilitarlo en el pool existente de Cloudflare. En una baja deshabilita los
-índices más altos, confirma `disabled_at`, espera 60 segundos y recién entonces
+índices más altos, confirma que quedaron deshabilitados, espera 60 segundos y recién entonces
 los destruye. Producción presenta el plan antes de requerir aprobación en
 `production-infrastructure`.
 Las imágenes se resuelven desde los últimos GitHub Deployments exitosos del

@@ -74,7 +74,7 @@ class ProvisioningTests(unittest.TestCase):
         self.assertIn("needs: [plan, apply-shrink]", workflow)
 
         sync = Path(".github/workflows/sync-load-balancer.yml").read_text()
-        self.assertLess(sync.index("disabled_at"), sync.index('sleep "$DRAIN_SECONDS"'))
+        self.assertLess(sync.index('.enabled == false'), sync.index('sleep "$DRAIN_SECONDS"'))
 
 
 if __name__ == "__main__":
