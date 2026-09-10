@@ -56,8 +56,8 @@ ansible-lint ansible/playbooks ansible/roles
 
 ## Configurar y verificar una réplica
 
-Esperar que cloud-init y SSH estén disponibles. Un reboot durante la
-actualización inicial es posible.
+El playbook espera SSH y cloud-init, y se reconecta si la actualización inicial
+reinicia la instancia.
 
 ```bash
 ssh ubuntu@IP_DE_LA_REPLICA cloud-init status --wait

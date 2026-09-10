@@ -14,6 +14,19 @@
 
     - name: Wait for cloud-init
       ansible.builtin.command: cloud-init status --wait
+      register: cloud_init_wait
+      changed_when: false
+      failed_when: >-
+        not (cloud_init_wait.unreachable | default(false))
+        and cloud_init_wait.rc != 0
+      ignore_unreachable: true
+
+    - name: Reconnect after possible cloud-init reboot
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+
+    - name: Confirm cloud-init completed
+      ansible.builtin.command: cloud-init status --wait
       changed_when: false
 
     - name: Gather facts after SSH and cloud-init are ready
