@@ -43,6 +43,18 @@ class DeploymentTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {"TF_PRIMARY_INSTANCE_NAME": "staging-primary", "TF_PRIMARY_INSTANCE_IPV4": "192.0.2.1"}):
             self.assertEqual(deployment.terraform_hosts({}), [{"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"}])
 
+    def test_cloudflare_origins_disable_only_replicas_above_target(self):
+        hosts = deployment.hosts([
+            {"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"},
+            {"role": "replica", "name": "staging-replica-01", "ipv4": "192.0.2.2"},
+            {"role": "replica", "name": "staging-replica-02", "ipv4": "192.0.2.3"},
+        ])
+        self.assertEqual(deployment.cloudflare_origins(hosts, "staging", 1), {"origins": {
+            "staging-primary": {"address": "192.0.2.1", "enabled": True},
+            "staging-replica-01": {"address": "192.0.2.2", "enabled": True},
+            "staging-replica-02": {"address": "192.0.2.3", "enabled": False},
+        }})
+
     def test_private_output(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "inventory.json"

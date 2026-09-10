@@ -66,6 +66,16 @@ def new_hosts(all_hosts: list[dict[str, str]], environment: str, current: int, d
     return selected
 
 
+def cloudflare_origins(all_hosts: list[dict[str, str]], environment: str, active_replicas: int) -> dict[str, object]:
+    if active_replicas < 0:
+        raise SystemExit("Active replica count cannot be negative")
+    active = {f"{environment}-replica-{number:02d}" for number in range(1, active_replicas + 1)}
+    return {"origins": {
+        host["name"]: {"address": host["ipv4"], "enabled": host["role"] == "primary" or host["name"] in active}
+        for host in all_hosts
+    }}
+
+
 def write_private(path: Path, value: object) -> None:
     path.write_text(json.dumps(value) + "\n", encoding="utf-8")
     path.chmod(0o600)
@@ -105,6 +115,11 @@ def main() -> None:
     new.add_argument("current", type=int)
     new.add_argument("desired", type=int)
     new.add_argument("--user", default="ubuntu")
+    origins = commands.add_parser("cloudflare-origins")
+    origins.add_argument("hosts_json", type=Path)
+    origins.add_argument("output", type=Path)
+    origins.add_argument("environment", choices=("staging", "production"))
+    origins.add_argument("active_replicas", type=int)
     keys = commands.add_parser("keys")
     keys.add_argument("output", type=Path)
     args = parser.parse_args()
@@ -122,6 +137,9 @@ def main() -> None:
         write_private(args.output, {"deploy_ssh_public_keys": value})
         return
     all_hosts = terraform_hosts(json.loads(args.hosts_json.read_text(encoding="utf-8")))
+    if args.command == "cloudflare-origins":
+        write_private(args.output, cloudflare_origins(all_hosts, args.environment, args.active_replicas))
+        return
     if args.command == "new-inventory":
         all_hosts = new_hosts(all_hosts, args.environment, args.current, args.desired)
         user = args.user
