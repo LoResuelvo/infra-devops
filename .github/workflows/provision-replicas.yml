@@ -1,4 +1,5 @@
 name: Scale replicas
+
 on:
   workflow_dispatch:
     inputs:
@@ -6,12 +7,18 @@ on:
         description: Environment to provision
         type: choice
         required: true
-        options: [staging, production]
+        options:
+          - staging
+          - production
       desired-replica-count:
         description: Total desired number of replicas
         type: number
         required: true
-permissions: {contents: read, id-token: write, deployments: read}
+permissions:
+  contents: read
+  id-token: write
+  deployments: read
+
 jobs:
   provision:
     uses: ./.github/workflows/provision-replicas-internal.yml
@@ -19,5 +26,4 @@ jobs:
       environment: ${{ inputs.environment }}
       terraform-root: terraform/environments/${{ inputs.environment }}/replicas
       desired-replica-count: ${{ fromJSON(inputs.desired-replica-count) }}
-
     secrets: inherit

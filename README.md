@@ -1,8 +1,9 @@
 # LoResuelvo — infraestructura y DevOps
 
 Infraestructura como código y herramientas operativas del equipo LoResuelvo.
-Terraform modela réplicas en OVHcloud/OpenStack y el balanceo en Cloudflare
-mediante states independientes por ambiente. Las VMs primarias existentes solo
+Terraform modela las réplicas en OVHcloud/OpenStack. El Load Balancer, su pool,
+monitor y DNS se configuran manualmente en Cloudflare; Actions sólo sincroniza
+los endpoints de las réplicas. Las VMs primarias existentes solo
 forman parte del inventario de salida y están completamente fuera del lifecycle
 de Terraform.
 
@@ -12,10 +13,8 @@ de Terraform.
 terraform/
 ├── environments/
 │   ├── staging/replicas/     # root y state remoto de staging
-│   ├── staging/load-balancer/
-│   ├── production/replicas/  # root y state remoto de producción
-│   └── production/load-balancer/
-└── modules/                  # nodos de aplicación y Load Balancing
+│   └── production/replicas/  # root y state remoto de producción
+└── modules/application-node/ # nodo de aplicación
 cloud-init/
 └── application-node.yaml     # acceso mínimo para Ansible
 ansible/
@@ -42,10 +41,6 @@ terraform -chdir=terraform/environments/staging/replicas test
 terraform -chdir=terraform/environments/production/replicas init -backend=false
 terraform -chdir=terraform/environments/production/replicas validate
 terraform -chdir=terraform/environments/production/replicas test
-terraform -chdir=terraform/environments/staging/load-balancer init -backend=false
-terraform -chdir=terraform/environments/staging/load-balancer test
-terraform -chdir=terraform/environments/production/load-balancer init -backend=false
-terraform -chdir=terraform/environments/production/load-balancer test
 ```
 
 Los tests usan un provider mock: no requieren credenciales ni acceden a OVH.
@@ -80,12 +75,12 @@ espera SSH y cloud-init y ejecuta configuración y verificación. Los despliegue
 combinan la primaria de Infisical con los outputs de réplicas de Terraform;
 Infisical no almacena `DEPLOY_HOSTS`.
 
-El workflow manual `Scale replicas` recibe el ambiente y la cantidad total deseada. En una alta
-configura, despliega y verifica cada nodo antes de habilitarlo en Cloudflare. En una baja deshabilita
-los índices más altos, confirma `disabled_at`, espera el drenaje configurado y recién entonces los
-destruye. `Initialize load balancer` crea o sincroniza inicialmente el pool y sus aliases.
-Producción
-presenta el plan antes de requerir aprobación en `production-infrastructure`.
+El workflow manual `Scale replicas` recibe el ambiente y la cantidad total
+deseada. En una alta configura, despliega y verifica cada nodo antes de
+habilitarlo en el pool existente de Cloudflare. En una baja deshabilita los
+índices más altos, confirma `disabled_at`, espera 60 segundos y recién entonces
+los destruye. Producción presenta el plan antes de requerir aprobación en
+`production-infrastructure`.
 Las imágenes se resuelven desde los últimos GitHub Deployments exitosos del
 ambiente y siempre se despliegan por digest.
 

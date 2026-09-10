@@ -87,7 +87,7 @@ ansible/tests/check-idempotence.sh \
 Ejecutar `Scale replicas`, elegir staging o producción e indicar la cantidad
 total deseada. Una cantidad igual termina sin aplicar; una mayor crea, configura
 e hidrata únicamente los índices faltantes; una menor elimina primero los índices
-más altos, espera 1800 segundos de drenaje y después destruye las VMs y verifica
+más altos, espera 60 segundos de drenaje y después destruye las VMs y verifica
 la primaria y todas las réplicas supervivientes. El apply de producción espera la
 aprobación de `production-infrastructure`; state y releases se vuelven a
 validar antes de aplicar y desplegar.
@@ -115,7 +115,7 @@ En Infisical, para cada ambiente, usar rutas consistentes:
 
 `/infrastructure` debe incluir `TF_PRIMARY_INSTANCE_NAME`,
 `TF_PRIMARY_INSTANCE_IPV4`, `TF_PUBLIC_NETWORK_ID`, `CLOUDFLARE_API_TOKEN`,
-`CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_ZONE_ID`. Región, imagen y flavor
+`CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_POOL_ID`. Región, imagen y flavor
 están versionados en cada root. `terraform.tfvars.example` es únicamente la
 plantilla para crear un `terraform.tfvars` local ignorado; no contiene ni
 representa los valores efectivos de CI.
@@ -127,13 +127,25 @@ Infisical.
 
 ## Puesta en marcha de Cloudflare
 
-1. Desplegar el gateway actualizado y comprobar `200` en `/__gateway_ready` con
-   el SNI y `Host` de API.
-2. En staging, importar los DNS existentes al root `load-balancer` cuando
-   corresponda y ejecutar `Initialize load balancer`; comprobar API, Web,
-   WebSocket y failover. Repetir en producción. Un registro existente se importa
-   con `terraform import 'module.load_balancer.cloudflare_dns_record.alias[\"HOST\"]' ZONE_ID/RECORD_ID`.
-Rollback: restaurar los DNS anteriores y luego deshabilitar el Load Balancer.
+Cloudflare se configura desde su panel, fuera de Terraform. Por ambiente:
+
+1. Crear el Load Balancer canónico: `test.loresuelvo.com.ar` en staging y
+   `loresuelvo.com.ar` en producción.
+2. Crear un pool con steering aleatorio, mínimo saludable 1 y el endpoint fijo
+   `<ambiente>-primary` apuntando a `TF_PRIMARY_INSTANCE_IPV4`.
+3. Asociar un monitor HTTPS, puerto 443, ruta `/__gateway_ready`, código `200`,
+   región Eastern North America y `Host` de API (`api-test.loresuelvo.com.ar`
+   o `api.loresuelvo.com.ar`).
+4. Configurar afinidad Cookie, Zero Downtime Failover Sticky, Adaptive Routing
+   desactivado, shedding desactivado, proximity desactivado y sin custom rules.
+5. Crear los aliases DNS proxied como CNAME al hostname canónico: `api-test` en
+   staging; `api` y `www` en producción.
+6. Guardar el Account ID y el Pool ID en Infisical y ejecutar `Scale replicas`
+   sólo cuando se quiera cambiar la cantidad de VMs.
+
+El flujo conserva el endpoint primario y cualquier endpoint manual cuyo nombre
+no siga `<ambiente>-replica-NN`. Rollback: restaurar los DNS anteriores y luego
+deshabilitar el Load Balancer.
 Configurar en Cloudflare una
 alerta de uso acorde al presupuesto; el provider no administra alertas de
 facturación. La referencia inicial es USD 5/mes hasta dos orígenes, USD 5 por

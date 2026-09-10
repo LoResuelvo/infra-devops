@@ -66,14 +66,44 @@ def new_hosts(all_hosts: list[dict[str, str]], environment: str, current: int, d
     return selected
 
 
-def cloudflare_origins(all_hosts: list[dict[str, str]], environment: str, active_replicas: int) -> dict[str, object]:
+def cloudflare_origins(pool: object, all_hosts: list[dict[str, str]], environment: str, active_replicas: int, mode: str) -> dict[str, object]:
     if active_replicas < 0:
         raise SystemExit("Active replica count cannot be negative")
+    if mode not in {"activate", "drain", "remove"}:
+        raise SystemExit("Cloudflare synchronization mode is invalid")
+    if not isinstance(pool, dict) or not isinstance(pool.get("origins"), list):
+        raise SystemExit("Cloudflare pool response is invalid")
+    if any(not isinstance(origin, dict) or not origin.get("name") or not origin.get("address") for origin in pool["origins"]):
+        raise SystemExit("Cloudflare pool contains an invalid endpoint")
+
+    primary_name = f"{environment}-primary"
+    primary = next((host for host in all_hosts if host["role"] == "primary"), None)
+    if primary is None or primary["name"] != primary_name:
+        raise SystemExit(f"TF_PRIMARY_INSTANCE_NAME must be {primary_name}")
+
+    managed = re.compile(rf"{re.escape(environment)}-replica-\d{{2}}")
+    writable = ("name", "address", "enabled", "weight", "header", "virtual_network_id")
+    preserved = [
+        {key: origin[key] for key in writable if key in origin}
+        for origin in pool["origins"]
+        if isinstance(origin, dict) and not managed.fullmatch(str(origin.get("name", "")))
+    ]
+    pool_primary = next((origin for origin in preserved if origin.get("name") == primary_name), None)
+    if pool_primary is None or pool_primary.get("address") != primary["ipv4"] or pool_primary.get("enabled", True) is not True:
+        raise SystemExit(f"Cloudflare endpoint {primary_name} must be enabled and match TF_PRIMARY_INSTANCE_IPV4")
+
     active = {f"{environment}-replica-{number:02d}" for number in range(1, active_replicas + 1)}
-    return {"origins": {
-        host["name"]: {"address": host["ipv4"], "enabled": host["role"] == "primary" or host["name"] in active}
-        for host in all_hosts
-    }}
+    replicas = sorted((host for host in all_hosts if host["role"] == "replica"), key=lambda host: host["name"])
+    expected = {f"{environment}-replica-{number:02d}" for number in range(1, len(replicas) + 1)}
+    if {host["name"] for host in replicas} != expected or active_replicas > len(replicas):
+        raise SystemExit("Terraform outputs do not match the requested replica count")
+    return {"origins": [
+        *preserved,
+        *(
+            {"name": host["name"], "address": host["ipv4"], "enabled": mode != "drain" or host["name"] in active, "weight": 1}
+            for host in replicas
+        ),
+    ]}
 
 
 def write_private(path: Path, value: object) -> None:
@@ -116,10 +146,12 @@ def main() -> None:
     new.add_argument("desired", type=int)
     new.add_argument("--user", default="ubuntu")
     origins = commands.add_parser("cloudflare-origins")
+    origins.add_argument("pool_json", type=Path)
     origins.add_argument("hosts_json", type=Path)
     origins.add_argument("output", type=Path)
     origins.add_argument("environment", choices=("staging", "production"))
     origins.add_argument("active_replicas", type=int)
+    origins.add_argument("mode", choices=("activate", "drain", "remove"))
     keys = commands.add_parser("keys")
     keys.add_argument("output", type=Path)
     args = parser.parse_args()
@@ -138,7 +170,10 @@ def main() -> None:
         return
     all_hosts = terraform_hosts(json.loads(args.hosts_json.read_text(encoding="utf-8")))
     if args.command == "cloudflare-origins":
-        write_private(args.output, cloudflare_origins(all_hosts, args.environment, args.active_replicas))
+        response = json.loads(args.pool_json.read_text(encoding="utf-8"))
+        if not isinstance(response, dict) or response.get("success") is not True:
+            raise SystemExit("Cloudflare pool request failed")
+        write_private(args.output, cloudflare_origins(response.get("result"), all_hosts, args.environment, args.active_replicas, args.mode))
         return
     if args.command == "new-inventory":
         all_hosts = new_hosts(all_hosts, args.environment, args.current, args.desired)

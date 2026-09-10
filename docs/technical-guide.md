@@ -4,8 +4,9 @@
 
 | Capa | Responsabilidad |
 |---|---|
-| Roots Terraform | Deciden cuántas réplicas existen en staging y producción. |
-| Cloudflare Load Balancing | Publica un pool de gateways completo por ambiente. |
+| Terraform | Decide cuántas réplicas existen en staging y producción; no administra Cloudflare. |
+| Cloudflare manual | Mantiene Load Balancer, pool, monitor, DNS, steering y endpoint primario. |
+| GitHub Actions | Coordina Terraform, Ansible y los endpoints de réplicas del pool. |
 | `application-node` | Crea keypair, VM, red y entrega `user_data`. |
 | Cloud-init | Deja Ubuntu accesible como `ubuntu` con Python, sudo y SSH seguro. |
 | Ansible | Configura usuario, Docker, firewall, actualizaciones y nodo. |
@@ -24,9 +25,9 @@ El lifecycle ignora cambios posteriores de `image_id`, por lo que una imagen
 nueva solo afecta nodos nuevos.
 
 El escalado hacia abajo deshabilita primero los índices más altos en el pool,
-confirma que Cloudflare informó `disabled_at`, espera `drain_seconds` (1800 por
-defecto), destruye VM y keypair y elimina finalmente los orígenes del pool.
-Reducir esa ventana puede cortar sesiones HTTP o WebSockets activos.
+confirma que Cloudflare informó `disabled_at`, espera 60 segundos, destruye VM
+y keypair y elimina finalmente los endpoints del pool. Esta ventana corta puede
+interrumpir sesiones HTTP o WebSockets que sigan activas.
 
 Cada root versiona su región, imagen y flavor. Recibe `public_network_id` y
 `operator_ssh_public_key` desde Infisical, además del `replica_count` solicitado
@@ -36,14 +37,20 @@ Infisical, incluida cuando el state todavía está vacío.
 
 ## State y secretos
 
-Cada root de réplicas y de Load Balancing usa un backend S3 parcial, cifrado y con `use_lockfile`, sobre un
-bucket R2 privado por ambiente. `*.tfstate`, `*.tfvars`, planes y `.terraform/`
+Cada root de réplicas usa un backend S3 parcial, cifrado y con `use_lockfile`,
+sobre un bucket R2 privado por ambiente. `*.tfstate`, `*.tfvars`, planes y `.terraform/`
 están ignorados. Bucket, endpoint y credenciales se pasan al ejecutar `init`.
-`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_ZONE_ID` se leen
-de `/infrastructure` en Infisical. El token sólo necesita DNS Write, Load
-Balancers Write y Load Balancing: Monitors and Pools Write, con sus permisos
-Read correspondientes. Credenciales OpenStack, claves privadas, inventarios reales y claves de
-deployment nunca se declaran en archivos versionados.
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_POOL_ID` se leen
+de `/infrastructure` en Infisical. El token sólo necesita permiso de edición
+`Load Balancing: Monitors and Pools`. Credenciales OpenStack, claves privadas,
+inventarios reales y claves de deployment nunca se declaran en archivos
+versionados.
+
+Actions sólo considera propios los endpoints llamados
+`<ambiente>-replica-NN`. Conserva los demás endpoints y valida antes de escribir
+que `<ambiente>-primary` exista, esté habilitado y coincida con
+`TF_PRIMARY_INSTANCE_IPV4`. La actualización parcial del pool no modifica su
+monitor, regiones, steering ni demás configuración manual.
 
 ## Cloud-init mínimo
 

@@ -1,12 +1,22 @@
 name: Provision replicas internal
+
 on:
   workflow_call:
     inputs:
-      environment: {type: string, required: true}
-      terraform-root: {type: string, required: true}
-      desired-replica-count: {type: number, required: true}
+      environment:
+        type: string
+        required: true
+      terraform-root:
+        type: string
+        required: true
+      desired-replica-count:
+        type: number
+        required: true
 
-permissions: {contents: read, id-token: write, deployments: read}
+permissions:
+  contents: read
+  id-token: write
+  deployments: read
 
 concurrency:
   group: provision-replicas-${{ inputs.environment }}
