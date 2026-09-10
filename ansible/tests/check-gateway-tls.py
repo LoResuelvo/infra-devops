@@ -13,7 +13,7 @@ from jinja2 import Template
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(404 if self.path == '/__gateway_ready' else 200)
+        self.send_response(200)
         self.end_headers()
 
     def log_message(self, *_args):
@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory() as directory:
                     command = task.get('ansible.builtin.command', {}).get('argv')
                     if not command or command[0] != 'curl':
                         continue
-                    for item in task.get('loop', [dict(path='/__gateway_ready', status='404')]):
+                    for item in task.get('loop', [dict(path='/__gateway_ready', status='200')]):
                         values = dict(api_server_names='gateway.test', item=dict(item, host='gateway.test'))
                         argv = [Template(arg).render(**values).replace(':443:', f':{port}:')
                                 .replace('https://gateway.test/', f'https://gateway.test:{port}/')
@@ -56,4 +56,4 @@ with tempfile.TemporaryDirectory() as directory:
         finally:
             server.shutdown()
             thread.join()
-print('Gateway and verification probes pass with required SNI (200 and 404).')
+print('Gateway and verification probes pass with required SNI and status 200.')

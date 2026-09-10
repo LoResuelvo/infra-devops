@@ -60,7 +60,7 @@ server {
 
     location = /__gateway_ready {
         default_type text/plain;
-        return 404 "loresuelvo gateway ready\n";
+        return 200 "loresuelvo gateway ready\n";
     }
 
     location /ws {

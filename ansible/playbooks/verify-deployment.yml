@@ -26,7 +26,7 @@
           - "https://{{ item.host }}{{ item.path }}"
       loop:
         - {host: "{{ web_server_name }}", path: /, status: '200'}
-        - {host: "{{ api_server_name }}", path: /__gateway_ready, status: '404'}
+        - {host: "{{ api_server_name }}", path: /__gateway_ready, status: '200'}
       changed_when: false
       register: route_health
       failed_when: route_health.rc != 0 or route_health.stdout != item.status

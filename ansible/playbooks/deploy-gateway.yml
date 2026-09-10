@@ -65,8 +65,8 @@
       register: gateway_health
       retries: 30
       delay: 2
-      until: gateway_health.rc == 0 and gateway_health.stdout == '404'
-      failed_when: gateway_health.rc != 0 or gateway_health.stdout != '404'
+      until: gateway_health.rc == 0 and gateway_health.stdout == '200'
+      failed_when: gateway_health.rc != 0 or gateway_health.stdout != '200'
     - name: Record gateway release
       ansible.builtin.copy:
         dest: /opt/loresuelvo/gateway/CURRENT_RELEASE
