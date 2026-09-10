@@ -132,7 +132,7 @@ Infisical.
 2. En staging, importar los DNS existentes al root `load-balancer` cuando
    corresponda y ejecutar `Initialize load balancer`; comprobar API, Web,
    WebSocket y failover. Repetir en producción. Un registro existente se importa
-   con `terraform import cloudflare_dns_record.alias[\"HOST\"] ZONE_ID/RECORD_ID`.
+   con `terraform import 'module.load_balancer.cloudflare_dns_record.alias[\"HOST\"]' ZONE_ID/RECORD_ID`.
 Rollback: restaurar los DNS anteriores y luego deshabilitar el Load Balancer.
 Configurar en Cloudflare una
 alerta de uso acorde al presupuesto; el provider no administra alertas de
