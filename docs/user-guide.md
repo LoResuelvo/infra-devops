@@ -87,9 +87,8 @@ ansible/tests/check-idempotence.sh \
 Ejecutar `Scale replicas`, elegir staging o producción e indicar la cantidad
 total deseada. Una cantidad igual termina sin aplicar; una mayor crea, configura
 e hidrata únicamente los índices faltantes; una menor elimina primero los índices
-más altos y después verifica la primaria y todas las réplicas supervivientes. La
-baja es disruptiva para las conexiones activas y no ejecuta configuración,
-deploys ni migraciones. El apply de producción espera la
+más altos, espera 1800 segundos de drenaje y después destruye las VMs y verifica
+la primaria y todas las réplicas supervivientes. El apply de producción espera la
 aprobación de `production-infrastructure`; state y releases se vuelven a
 validar antes de aplicar y desplegar.
 
@@ -115,7 +114,8 @@ En Infisical, para cada ambiente, usar rutas consistentes:
 ```
 
 `/infrastructure` debe incluir `TF_PRIMARY_INSTANCE_NAME`,
-`TF_PRIMARY_INSTANCE_IPV4` y `TF_PUBLIC_NETWORK_ID`. Región, imagen y flavor
+`TF_PRIMARY_INSTANCE_IPV4`, `TF_PUBLIC_NETWORK_ID`, `CLOUDFLARE_API_TOKEN`,
+`CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_ZONE_ID`. Región, imagen y flavor
 están versionados en cada root. `terraform.tfvars.example` es únicamente la
 plantilla para crear un `terraform.tfvars` local ignorado; no contiene ni
 representa los valores efectivos de CI.
@@ -124,6 +124,21 @@ No se requieren GitHub Actions Variables para Terraform. Crear ambos buckets
 R2 privados y el environment GitHub `production-infrastructure` con aprobación
 requerida. No guardar cantidades de réplicas ni inventarios derivados en
 Infisical.
+
+## Puesta en marcha de Cloudflare
+
+1. Desplegar el gateway actualizado y comprobar `200` en `/__gateway_ready` con
+   el SNI y `Host` de API.
+2. En staging, importar los DNS existentes al root `load-balancer` cuando
+   corresponda y ejecutar `Initialize load balancer`; comprobar API, Web,
+   WebSocket y failover. Repetir en producción. Un registro existente se importa
+   con `terraform import cloudflare_dns_record.alias[\"HOST\"] ZONE_ID/RECORD_ID`.
+Rollback: restaurar los DNS anteriores y luego deshabilitar el Load Balancer.
+Configurar en Cloudflare una
+alerta de uso acorde al presupuesto; el provider no administra alertas de
+facturación. La referencia inicial es USD 5/mes hasta dos orígenes, USD 5 por
+origen adicional y 500.000 consultas DNS incluidas; confirmar el precio vigente
+antes de activar producción.
 
 ## Prueba temporal en OVH
 
@@ -159,7 +174,6 @@ claves privadas SSH
 *.tfplan
 .terraform/
 .venv/
-plan.md
 ```
 
 Comprobar cualquier archivo dudoso con `git check-ignore -v RUTA`. Los state,
