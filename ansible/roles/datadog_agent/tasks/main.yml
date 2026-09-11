@@ -1,0 +1,34 @@
+---
+- name: Validate Datadog configuration
+  ansible.builtin.assert:
+    that:
+      - environment_name in ['staging', 'production']
+      - lookup('ansible.builtin.env', 'DATADOG_API_KEY') | length > 0
+    fail_msg: Set environment_name to staging or production and export DATADOG_API_KEY.
+  no_log: true
+
+- name: Run Datadog Agent
+  community.docker.docker_container:
+    name: datadog-agent
+    image: registry.datadoghq.com/agent:7
+    state: started
+    restart_policy: unless-stopped
+    pull: always
+    cgroupns_mode: host
+    pid_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+      - /opt/datadog-agent/run:/opt/datadog-agent/run:rw
+    env:
+      DD_API_KEY: "{{ lookup('ansible.builtin.env', 'DATADOG_API_KEY') }}"
+      DD_SITE: us5.datadoghq.com
+      DD_ENV: "{{ environment_name }}"
+      DD_TAGS: host_role:application-node
+      DD_LOGS_ENABLED: "true"
+      DD_LOGS_CONFIG_CONTAINER_COLLECT_ALL: "true"
+      DD_CONTAINER_EXCLUDE: name:datadog-agent
+      DD_APM_ENABLED: "false"
+  no_log: true

@@ -50,6 +50,7 @@
   roles:
     - role: base_node
     - role: docker
+    - role: datadog_agent
     - role: deploy_user
     - role: firewall
 

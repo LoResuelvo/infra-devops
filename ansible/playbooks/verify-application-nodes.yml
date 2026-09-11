@@ -61,6 +61,20 @@
       ansible.builtin.command: docker network inspect app-network
       changed_when: false
 
+    - name: Inspect Datadog Agent
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - --format={{ '{{' }}.State.Status{{ '}}' }}
+          - datadog-agent
+      register: datadog_agent_state
+      changed_when: false
+
+    - name: Check Datadog Agent health
+      ansible.builtin.command: docker exec datadog-agent agent health
+      changed_when: false
+
     - name: Gather service state
       ansible.builtin.service_facts:
 
@@ -149,6 +163,7 @@
           - ansible_facts.services['docker.service'].state == 'running'
           - ansible_facts.services['unattended-upgrades.service'].state == 'running'
           - active_services.results | map(attribute='stdout') | unique | list == ['active']
+          - datadog_agent_state.stdout == 'running'
 
     - name: Verify root directories
       ansible.builtin.assert:
