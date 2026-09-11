@@ -64,6 +64,7 @@ ssh ubuntu@IP_DE_LA_REPLICA cloud-init status --wait
 
 ansible-playbook -i ansible/inventories/staging/hosts.yml \
   -e @ansible/vars/deploy-keys-staging.yml \
+  -e environment_name=staging \
   --limit staging-replica-01 \
   ansible/playbooks/configure-application-nodes.yml
 
@@ -79,7 +80,8 @@ Para ejecutar dos pasadas de configuración y exigir idempotencia en la segunda:
 ansible/tests/check-idempotence.sh \
   ansible/inventories/staging/hosts.yml \
   staging-replica-01 \
-  ansible/vars/deploy-keys-staging.yml
+  ansible/vars/deploy-keys-staging.yml \
+  staging
 ```
 
 ## Escalado de réplicas desde GitHub Actions
@@ -113,7 +115,7 @@ En Infisical, para cada ambiente, usar rutas consistentes:
 /webapp          # configuración privada de Web App
 ```
 
-`/infrastructure` debe incluir `TF_PRIMARY_INSTANCE_NAME`,
+`/infrastructure` debe incluir `DATADOG_API_KEY`, `TF_PRIMARY_INSTANCE_NAME`,
 `TF_PRIMARY_INSTANCE_IPV4`, `TF_PUBLIC_NETWORK_ID`, `CLOUDFLARE_API_TOKEN`,
 `CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_POOL_ID`. Región, imagen y flavor
 están versionados en cada root. `terraform.tfvars.example` es únicamente la

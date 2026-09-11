@@ -72,6 +72,8 @@ necesita Python y SSH. `ansible/requirements.yml` fija
 - `docker`: repositorio oficial, Docker CE/CLI `29.7.2`, containerd `2.3.3`,
   Buildx `0.36.1`, Compose `5.4.0`, paquetes en hold, rotación de logs y
   `live-restore`;
+- `datadog_agent`: Agent 7 en Docker con métricas del host y contenedores y
+  recolección de logs, etiquetados por ambiente y rol;
 - `deploy_user`: usuario sin contraseña, claves requeridas, grupo `docker`,
   directorios de API/Web App/gateway con permisos restrictivos y ampliación de
   `AllowUsers` a `ubuntu deploy`;
@@ -94,7 +96,7 @@ publica como output ni artifact.
 Los dominios del gateway se declaran en `deploy/gateway/config/{staging,prod}.conf`.
 Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
 modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.
-La versión de configuración correspondiente es `2026-09-07.2`. Cada despliegue
+La versión de configuración correspondiente es `2026-09-10.1`. Cada despliegue
 publica tag y digest inmutable en la URL de su GitHub Deployment. El alta de
 réplicas consulta el último Deployment exitoso de API, Web App y gateway para
 el ambiente. El modo `hydrate` de la API instala un nodo nuevo sin ejecutar
@@ -109,9 +111,15 @@ estables, inventario y cloud-init YAML válido con SSH/Python/UFW y sin Docker n
 `deploy`. La capa Ansible se valida con inventario, syntax-check y
 `ansible-lint`.
 
+`DATADOG_API_KEY` se obtiene exclusivamente del entorno del controlador (en CI,
+desde `/infrastructure` de Infisical). Para configurar localmente, exportarla y
+pasar `-e environment_name=staging` o `production`. El rollout inicial requiere
+ejecutar el playbook una vez sobre las VMs actuales de cada ambiente.
+
 En una réplica configurada, `verify-application-nodes.yml` comprueba usuarios y
 claves, SSH, paquetes y holds de Docker, daemon, Compose, `app-network`,
-servicios, directorios raíz, UFW, `DOCKER-USER`, actualizaciones y marcas. El
+servicios, el estado y healthcheck del Agent, directorios raíz, UFW,
+`DOCKER-USER`, actualizaciones y marcas. El
 playbook también verifica propietario y modo de cada directorio de despliegue.
 El script `ansible/tests/check-idempotence.sh` ejecuta dos pasadas y exige
 `changed=0`, `unreachable=0` y `failed=0` en la segunda.
