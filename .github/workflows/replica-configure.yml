@@ -41,6 +41,6 @@ jobs:
           printf '%s\n' "$OPERATOR_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/operator-key"
           chmod 0600 "$RUNNER_TEMP/operator-key"
       - name: Configure nodes
-        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/operator-key" -e @"$RUNNER_TEMP/deploy-keys.json" ansible/playbooks/configure-application-nodes.yml
+        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/operator-key" -e @"$RUNNER_TEMP/deploy-keys.json" -e environment_name='${{ inputs.environment }}' ansible/playbooks/configure-application-nodes.yml
       - name: Verify node configuration
-        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/operator-key" -e @"$RUNNER_TEMP/deploy-keys.json" ansible/playbooks/verify-application-nodes.yml
+        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/operator-key" -e @"$RUNNER_TEMP/deploy-keys.json" -e environment_name='${{ inputs.environment }}' ansible/playbooks/verify-application-nodes.yml

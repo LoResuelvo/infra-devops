@@ -76,6 +76,16 @@ class ProvisioningTests(unittest.TestCase):
         sync = Path(".github/workflows/sync-load-balancer.yml").read_text()
         self.assertLess(sync.index('.enabled == false'), sync.index('sleep "$DRAIN_SECONDS"'))
 
+    def test_replica_configuration_provisions_datadog(self):
+        playbook = Path("ansible/playbooks/configure-application-nodes.yml").read_text()
+        role = Path("ansible/roles/datadog_agent/tasks/main.yml").read_text()
+        workflow = Path(".github/workflows/replica-configure.yml").read_text()
+
+        self.assertLess(playbook.index("role: docker"), playbook.index("role: datadog_agent"))
+        self.assertIn("community.docker.docker_container:", role)
+        self.assertIn("lookup('ansible.builtin.env', 'DATADOG_API_KEY')", role)
+        self.assertIn("-e environment_name='${{ inputs.environment }}'", workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
