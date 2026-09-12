@@ -93,7 +93,10 @@ roles se usan para los dos ambientes; solo cambia la clave pública suministrada
 Los despliegues remotos usan los módulos de Docker Compose, copia, plantillas y
 healthchecks de Ansible. El inventario privado se genera durante el job y no se
 publica como output ni artifact.
-Los dominios del gateway se declaran en `deploy/gateway/config/{staging,prod}.conf`.
+Los dominios y el package de Android App Links del gateway se declaran en
+`deploy/gateway/config/{staging,prod}.conf`. Cada GitHub Environment debe definir
+la variable pública `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT` con la huella del
+certificado que firma la aplicación de ese ambiente.
 Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
 modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.
 La versión de configuración correspondiente es `2026-09-10.1`. Cada despliegue

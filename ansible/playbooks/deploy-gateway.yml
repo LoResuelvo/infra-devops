@@ -16,6 +16,8 @@
           - api_server_names is match('^[A-Za-z0-9][A-Za-z0-9.-]*$')
           - web_server_names is match('^[A-Za-z0-9][A-Za-z0-9 .-]*$')
           - admin_server_names is match('^[A-Za-z0-9][A-Za-z0-9 .-]*$')
+          - android_app_link_package_name is match('^[A-Za-z][A-Za-z0-9_.]*$')
+          - android_app_link_sha256_cert_fingerprint is match('^([A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}$')
   tasks:
     - name: Install gateway files
       ansible.builtin.copy:
@@ -34,13 +36,19 @@
         dest: /opt/loresuelvo/gateway/nginx/default.conf
         mode: "0640"
       register: gateway_config
+    - name: Render Android App Links configuration
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../../deploy/gateway/nginx/assetlinks.json.template"
+        dest: /opt/loresuelvo/gateway/nginx/assetlinks.json
+        mode: "0644"
+      register: gateway_assetlinks
     - name: Start gateway
       community.docker.docker_compose_v2:
         project_src: /opt/loresuelvo/gateway
         pull: always
         services: [gateway]
         state: present
-        recreate: "{{ 'always' if gateway_files.changed or gateway_config.changed else 'auto' }}"
+        recreate: "{{ 'always' if gateway_files.changed or gateway_config.changed or gateway_assetlinks.changed else 'auto' }}"
       environment:
         GATEWAY_IMAGE_REF: "{{ image_ref }}"
     - name: Wait for gateway readiness

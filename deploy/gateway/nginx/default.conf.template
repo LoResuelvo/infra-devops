@@ -95,6 +95,11 @@ server {
     ssl_certificate /etc/loresuelvo/gateway/tls/origin.crt;
     ssl_certificate_key /etc/loresuelvo/gateway/tls/origin.key;
 
+    location = /.well-known/assetlinks.json {
+        alias /etc/nginx/conf.d/assetlinks.json;
+        default_type application/json;
+    }
+
     location / {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
