@@ -22,6 +22,11 @@ jobs:
       - name: Lint shell scripts
         run: git ls-files -z '*.sh' | xargs -0 shellcheck
 
+      - name: Set up Docker Compose
+        uses: docker/setup-compose-action@v2
+        with:
+          version: v5.4.0
+
       - name: Validate Compose files without deployment secrets
         env:
           IMAGE_REF: example.invalid/application:ci
