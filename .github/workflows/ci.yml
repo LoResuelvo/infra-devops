@@ -70,9 +70,10 @@ jobs:
 
       - name: Validate gateway configuration for both environments
         env:
-          # nginx 1.31.5 alpine; validation only, not a deployment release.
-          NGINX_IMAGE: nginx@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
-        run: python scripts/validation/check-gateway-config.py "$NGINX_IMAGE"
+          GATEWAY_IMAGE: loresuelvo/gateway:ci
+        run: |
+          docker build --tag "$GATEWAY_IMAGE" deploy/gateway
+          python scripts/validation/check-gateway-config.py "$GATEWAY_IMAGE"
 
   terraform:
     name: Terraform (${{ matrix.environment }})
