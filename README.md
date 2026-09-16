@@ -33,6 +33,13 @@ guardan en GitHub Variables ni en el state de réplicas.
 
 ## Validación segura
 
+`Infrastructure CI` valida cada push de rama y PR, y puede reutilizarse desde
+un workflow de release. Ejecuta linters de Actions, shell y Ansible, validación
+de Compose, tests Python existentes y tests Terraform con providers mock.
+También renderiza la configuración de ambos gateways y ejecuta `nginx -t`
+con certificados ficticios. No publica imágenes, despliega ni consume secretos
+operativos. La prueba de idempotencia sobre VMs queda fuera de CI.
+
 ```bash
 terraform fmt -check -recursive terraform
 terraform -chdir=terraform/environments/staging/replicas init -backend=false

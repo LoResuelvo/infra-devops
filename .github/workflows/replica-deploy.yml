@@ -79,6 +79,7 @@ jobs:
         run: |
           source "$RUNNER_TEMP/releases.env"
           config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
+          # shellcheck source=/dev/null
           source "deploy/gateway/config/$config.conf"
           ansible-playbook -i "$RUNNER_TEMP/inventory.json" \
             --private-key "$RUNNER_TEMP/deploy-key" \

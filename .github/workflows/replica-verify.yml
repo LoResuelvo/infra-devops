@@ -39,5 +39,6 @@ jobs:
         env: {ENVIRONMENT: "${{ inputs.environment }}"}
         run: |
           config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
+          # shellcheck source=/dev/null
           source "deploy/gateway/config/$config.conf"
           ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/verify-deployment.yml -e api_server_name="$API_SERVER_NAMES" -e web_server_name="${WEB_SERVER_NAMES%% *}"
