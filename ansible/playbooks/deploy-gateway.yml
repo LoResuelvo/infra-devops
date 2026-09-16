@@ -4,6 +4,9 @@
   any_errors_fatal: true
   serial: 1
   gather_facts: false
+  vars:
+    ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
+    ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
   pre_tasks:
     - name: Check SSH connection and remote Python
       ansible.builtin.ping:
@@ -11,13 +14,20 @@
     - name: Validate gateway deployment
       ansible.builtin.assert:
         that:
-          - image_ref is match('^nginx@sha256:[a-f0-9]{64}$')
-          - release_tag is match('^[0-9]+\\.[0-9]+\\.[0-9]+(-alpine)?$')
+          - >-
+            (image_ref is match('^ghcr\\.io/loresuelvo/gateway@sha256:[a-f0-9]{64}$') and
+            release_tag is match('^v[0-9]+\\.[0-9]+\\.[0-9]+$')) or
+            (image_ref is match('^nginx@sha256:[a-f0-9]{64}$') and
+            release_tag is match('^[0-9]+\\.[0-9]+\\.[0-9]+(-alpine)?$'))
           - api_server_names is match('^[A-Za-z0-9][A-Za-z0-9.-]*$')
           - web_server_names is match('^[A-Za-z0-9][A-Za-z0-9 .-]*$')
           - admin_server_names is match('^[A-Za-z0-9][A-Za-z0-9 .-]*$')
           - android_app_link_package_name is match('^[A-Za-z][A-Za-z0-9_.]*$')
-          - android_app_link_sha256_cert_fingerprint is match('^([A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}$')
+          - >-
+            android_app_link_sha256_cert_fingerprint is
+            match('^([A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}$')
+          - image_ref is match('^nginx@') or (ghcr_user | length > 0 and ghcr_token | length > 0)
+      no_log: true
   tasks:
     - name: Install gateway files
       ansible.builtin.copy:
@@ -25,32 +35,52 @@
         dest: "{{ item.dest }}"
         mode: "{{ item.mode }}"
       loop:
-        - {src: "{{ playbook_dir }}/../../deploy/gateway/compose.yml", dest: /opt/loresuelvo/gateway/compose.yml, mode: "0640"}
-        - {src: "{{ origin_cert_file }}", dest: /etc/loresuelvo/gateway/tls/origin.crt, mode: "0640"}
-        - {src: "{{ origin_key_file }}", dest: /etc/loresuelvo/gateway/tls/origin.key, mode: "0600"}
+        - src: "{{ playbook_dir }}/../../deploy/gateway/compose.yml"
+          dest: /opt/loresuelvo/gateway/compose.yml
+          mode: "0640"
+        - src: "{{ origin_cert_file }}"
+          dest: /etc/loresuelvo/gateway/tls/origin.crt
+          mode: "0640"
+        - src: "{{ origin_key_file }}"
+          dest: /etc/loresuelvo/gateway/tls/origin.key
+          mode: "0600"
       no_log: true
       register: gateway_files
+
     - name: Render nginx configuration
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../../deploy/gateway/nginx/default.conf.template"
         dest: /opt/loresuelvo/gateway/nginx/default.conf
         mode: "0640"
       register: gateway_config
+
     - name: Render Android App Links configuration
       ansible.builtin.template:
         src: "{{ playbook_dir }}/../../deploy/gateway/nginx/assetlinks.json.template"
         dest: /opt/loresuelvo/gateway/nginx/assetlinks.json
         mode: "0644"
       register: gateway_assetlinks
+
+    - name: Log in to GHCR
+      community.docker.docker_login:
+        registry_url: ghcr.io
+        username: "{{ ghcr_user }}"
+        password: "{{ ghcr_token }}"
+      no_log: true
+      when: image_ref is match('^ghcr\\.io/')
+
     - name: Start gateway
       community.docker.docker_compose_v2:
         project_src: /opt/loresuelvo/gateway
         pull: always
         services: [gateway]
         state: present
-        recreate: "{{ 'always' if gateway_files.changed or gateway_config.changed or gateway_assetlinks.changed else 'auto' }}"
+        recreate: >-
+          {{ 'always' if gateway_files.changed or gateway_config.changed or
+          gateway_assetlinks.changed else 'auto' }}
       environment:
         GATEWAY_IMAGE_REF: "{{ image_ref }}"
+
     - name: Wait for gateway readiness
       ansible.builtin.command:
         argv:
@@ -75,6 +105,7 @@
       delay: 2
       until: gateway_health.rc == 0 and gateway_health.stdout == '200'
       failed_when: gateway_health.rc != 0 or gateway_health.stdout != '200'
+
     - name: Record gateway release
       ansible.builtin.copy:
         dest: /opt/loresuelvo/gateway/CURRENT_RELEASE
