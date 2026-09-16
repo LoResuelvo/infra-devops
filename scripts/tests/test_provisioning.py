@@ -67,6 +67,15 @@ class ProvisioningTests(unittest.TestCase):
         with patch.object(releases, "request_json", side_effect=responses):
             self.assertEqual(releases.latest_successful("api", "staging", "https://api.test"), ("v1.2.3", image))
 
+    def test_gateway_release_resolution_keeps_legacy_metadata_compatible(self):
+        for tag, image in (
+            ("v1.2.3", "ghcr.io/loresuelvo/gateway@sha256:" + "a" * 64),
+            ("1.31.5-alpine", "nginx@sha256:" + "b" * 64),
+        ):
+            responses = [[{"id": 1}], [{"state": "success", "environment_url": f"https://github.com/release#release_tag={tag}&image_ref={image}"}]]
+            with self.subTest(tag=tag), patch.object(releases, "request_json", side_effect=responses):
+                self.assertEqual(releases.latest_successful("gateway", "production", "https://api.test"), (tag, image))
+
     def test_scaling_orders_activation_and_drain_around_vm_changes(self):
         workflow = Path(".github/workflows/provision-replicas-internal.yml").read_text()
         self.assertIn("needs: [plan, verify-grow]", workflow)

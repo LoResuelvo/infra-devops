@@ -117,7 +117,11 @@ def write_private(path: Path, value: object) -> None:
 
 
 def validate_release(component: str, caller: str, ref_type: str, caller_tag: str, image: str, tag: str) -> None:
-    expected = f"LoResuelvo/loresuelvo-{component}"
+    expected = {
+        "api": "LoResuelvo/loresuelvo-api",
+        "webapp": "LoResuelvo/loresuelvo-webapp",
+        "gateway": "LoResuelvo/infra-devops",
+    }[component]
     if caller != expected:
         raise SystemExit("Deployment caller is not allowed.")
     if ref_type != "tag" or not re.fullmatch(r"v\d+\.\d+\.\d+", caller_tag) or tag != caller_tag:
@@ -130,7 +134,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     release = commands.add_parser("release")
-    release.add_argument("component", choices=("api", "webapp"))
+    release.add_argument("component", choices=("api", "webapp", "gateway"))
     release.add_argument("caller")
     release.add_argument("ref_type")
     release.add_argument("caller_tag")

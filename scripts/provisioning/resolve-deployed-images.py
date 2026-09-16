@@ -15,7 +15,11 @@ from typing import Any
 COMPONENTS = {
     "api": ("LoResuelvo/loresuelvo-api", r"^v\d+\.\d+\.\d+$", r"^ghcr\.io/loresuelvo/api@sha256:[a-f0-9]{64}$"),
     "webapp": ("LoResuelvo/loresuelvo-webapp", r"^v\d+\.\d+\.\d+$", r"^ghcr\.io/loresuelvo/webapp@sha256:[a-f0-9]{64}$"),
-    "gateway": ("LoResuelvo/infra-devops", r"^\d+\.\d+\.\d+(?:-alpine)?$", r"^nginx@sha256:[a-f0-9]{64}$"),
+    "gateway": (
+        "LoResuelvo/infra-devops",
+        r"^(?:v\d+\.\d+\.\d+|\d+\.\d+\.\d+(?:-alpine)?)$",
+        r"^(?:ghcr\.io/loresuelvo/gateway|nginx)@sha256:[a-f0-9]{64}$",
+    ),
 }
 
 

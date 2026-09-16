@@ -51,6 +51,7 @@ class DeploymentTests(unittest.TestCase):
 
     def test_release_validation(self):
         deployment.validate_release("api", "LoResuelvo/loresuelvo-api", "tag", "v1.2.3", "ghcr.io/loresuelvo/api@sha256:" + "a" * 64, "v1.2.3")
+        deployment.validate_release("gateway", "LoResuelvo/infra-devops", "tag", "v1.2.3", "ghcr.io/loresuelvo/gateway@sha256:" + "a" * 64, "v1.2.3")
         with self.assertRaises(SystemExit):
             deployment.validate_release("api", "other/repo", "tag", "v1.2.3", "x", "v1.2.3")
 
