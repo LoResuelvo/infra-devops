@@ -53,13 +53,28 @@ jobs:
         with:
           name: replica-scale-metadata-${{ github.run_id }}
           path: ${{ runner.temp }}/scale-metadata
-      - name: Resolve approved releases
-        env: {GITHUB_TOKEN: "${{ github.token }}"}
+      - name: Resolve deployed releases
+        id: releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          python3 scripts/provisioning/resolve-deployed-images.py '${{ inputs.environment }}' "$RUNNER_TEMP/releases.env"
+          python3 scripts/provisioning/resolve-deployed-images.py \
+            '${{ inputs.environment }}' \
+            "$RUNNER_TEMP/releases.env"
+          source "$RUNNER_TEMP/releases.env"
+          echo "gateway-tag=$GATEWAY_RELEASE_TAG" >> "$GITHUB_OUTPUT"
           release_fingerprint=$(sha256sum "$RUNNER_TEMP/releases.env" | cut -d' ' -f1)
-          expected_release_fingerprint=$(sed -n 's/^release-fingerprint=//p' "$RUNNER_TEMP/scale-metadata/scale-metadata.env")
+          expected_release_fingerprint=$(sed -n \
+            's/^release-fingerprint=//p' \
+            "$RUNNER_TEMP/scale-metadata/scale-metadata.env")
           [[ "$release_fingerprint" == "$expected_release_fingerprint" ]]
+
+      - name: Checkout deployed gateway release
+        if: startsWith(steps.releases.outputs.gateway-tag, 'v')
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.releases.outputs.gateway-tag }}
+          path: gateway-release
       - name: Hydrate API
         env: {ENVIRONMENT: "${{ inputs.environment }}"}
         run: |
@@ -72,18 +87,23 @@ jobs:
           source "$RUNNER_TEMP/releases.env"
           config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
           ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-webapp.yml -e environment_name="$ENVIRONMENT" -e image_ref="$WEBAPP_IMAGE_REF" -e release_tag="$WEBAPP_RELEASE_TAG" -e config_file="deploy/webapp/config/$config.conf" -e secrets_file="$GITHUB_WORKSPACE/webapp.env"
-      - name: Hydrate gateway
+      - name: Deploy gateway to replicas
         env:
           ENVIRONMENT: ${{ inputs.environment }}
           ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT: ${{ vars.ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT }}
         run: |
           source "$RUNNER_TEMP/releases.env"
-          config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
+          gateway_root="$GITHUB_WORKSPACE"
+          if [[ "$GATEWAY_RELEASE_TAG" == v* ]]; then
+            gateway_root="$GITHUB_WORKSPACE/gateway-release"
+          fi
+          config=staging
+          [[ "$ENVIRONMENT" != production ]] || config=prod
           # shellcheck source=/dev/null
-          source "deploy/gateway/config/$config.conf"
+          source "$gateway_root/deploy/gateway/config/$config.conf"
           ansible-playbook -i "$RUNNER_TEMP/inventory.json" \
             --private-key "$RUNNER_TEMP/deploy-key" \
-            ansible/playbooks/deploy-gateway.yml \
+            "$gateway_root/ansible/playbooks/deploy-gateway.yml" \
             -e image_ref="$GATEWAY_IMAGE_REF" \
             -e release_tag="$GATEWAY_RELEASE_TAG" \
             -e origin_cert_file="$RUNNER_TEMP/origin.crt" \
