@@ -116,7 +116,7 @@ def write_private(path: Path, value: object) -> None:
     path.chmod(0o600)
 
 
-def validate_release(component: str, caller: str, ref_type: str, caller_tag: str, image: str, tag: str) -> None:
+def validate_tag(component: str, caller: str, ref_type: str, tag: str) -> None:
     expected = {
         "api": "LoResuelvo/loresuelvo-api",
         "webapp": "LoResuelvo/loresuelvo-webapp",
@@ -124,8 +124,14 @@ def validate_release(component: str, caller: str, ref_type: str, caller_tag: str
     }[component]
     if caller != expected:
         raise SystemExit("Deployment caller is not allowed.")
-    if ref_type != "tag" or not re.fullmatch(r"v\d+\.\d+\.\d+", caller_tag) or tag != caller_tag:
-        raise SystemExit("Caller and release must use the same vX.Y.Z tag.")
+    if ref_type != "tag" or not re.fullmatch(r"v\d+\.\d+\.\d+", tag):
+        raise SystemExit("Release must use a vX.Y.Z tag.")
+
+
+def validate_release(component: str, caller: str, ref_type: str, caller_tag: str, image: str, tag: str) -> None:
+    validate_tag(component, caller, ref_type, caller_tag)
+    if tag != caller_tag:
+        raise SystemExit("Caller and release must use the same tag.")
     if not re.fullmatch(rf"ghcr\.io/loresuelvo/{component}@sha256:[a-f0-9]{{64}}", image):
         raise SystemExit("Image reference must be an immutable LoResuelvo digest.")
 
@@ -140,9 +146,11 @@ def main() -> None:
     release.add_argument("caller_tag")
     release.add_argument("image")
     release.add_argument("tag")
-    gateway = commands.add_parser("gateway")
-    gateway.add_argument("image")
-    gateway.add_argument("tag")
+    tag = commands.add_parser("tag")
+    tag.add_argument("component", choices=("api", "webapp", "gateway"))
+    tag.add_argument("caller")
+    tag.add_argument("ref_type")
+    tag.add_argument("tag")
     inv = commands.add_parser("inventory")
     inv.add_argument("hosts_json", type=Path)
     inv.add_argument("output", type=Path)
@@ -167,9 +175,8 @@ def main() -> None:
     if args.command == "release":
         validate_release(args.component, args.caller, args.ref_type, args.caller_tag, args.image, args.tag)
         return
-    if args.command == "gateway":
-        if not re.fullmatch(r"nginx@sha256:[a-f0-9]{64}", args.image) or not re.fullmatch(r"\d+\.\d+\.\d+(?:-alpine)?", args.tag):
-            raise SystemExit("Gateway release inputs are invalid.")
+    if args.command == "tag":
+        validate_tag(args.component, args.caller, args.ref_type, args.tag)
         return
     if args.command == "keys":
         value = json.loads(os.environ["DEPLOY_SSH_PUBLIC_KEYS_JSON"])

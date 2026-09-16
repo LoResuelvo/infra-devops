@@ -1,33 +1,72 @@
-name: Deploy Gateway
+name: Release Gateway
 
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: Environment to deploy
-        type: choice
-        required: true
-        options:
-          - staging
-          - production
-      image-ref:
-        description: Immutable nginx image reference (nginx@sha256:...)
-        type: string
-        required: true
-      release-tag:
-        description: Nginx release
-        type: string
-        required: true
+  push:
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: read
-  id-token: write
-  deployments: write
 
 jobs:
-  deploy:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-ref: ghcr.io/loresuelvo/gateway@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate release tag
+        run: |
+          python3 scripts/deployment.py tag gateway \
+            '${{ github.repository }}' \
+            '${{ github.ref_type }}' \
+            '${{ github.ref_name }}'
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and publish gateway
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: deploy/gateway
+          push: true
+          tags: ghcr.io/loresuelvo/gateway:${{ github.ref_name }}
+
+  deploy-staging:
+    needs: publish
+    permissions:
+      contents: read
+      id-token: write
+      deployments: write
     uses: ./.github/workflows/deploy-gateway-environment.yml
     with:
-      environment: ${{ inputs.environment }}
-      image-ref: ${{ inputs.image-ref }}
-      release-tag: ${{ inputs.release-tag }}
+      environment: staging
+      image-ref: ${{ needs.publish.outputs.image-ref }}
+      release-tag: ${{ github.ref_name }}
+
+  deploy-production:
+    needs:
+      - publish
+      - deploy-staging
+    permissions:
+      contents: read
+      id-token: write
+      deployments: write
+    uses: ./.github/workflows/deploy-gateway-environment.yml
+    with:
+      environment: production
+      image-ref: ${{ needs.publish.outputs.image-ref }}
+      release-tag: ${{ github.ref_name }}

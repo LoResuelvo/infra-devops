@@ -31,7 +31,10 @@ jobs:
 
       - name: Validate immutable release
         run: |
-          python3 scripts/deployment.py gateway \
+          python3 scripts/deployment.py release gateway \
+            '${{ github.repository }}' \
+            '${{ github.ref_type }}' \
+            '${{ github.ref_name }}' \
             '${{ inputs.image-ref }}' \
             '${{ inputs.release-tag }}'
 
