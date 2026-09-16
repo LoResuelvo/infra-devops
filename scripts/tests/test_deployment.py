@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -13,6 +14,23 @@ SPEC.loader.exec_module(deployment)
 
 
 class DeploymentTests(unittest.TestCase):
+    def test_gateway_configuration_loads_in_shell(self):
+        for environment, expected in (
+            ("staging", ["api-test.loresuelvo.com.ar", "test.loresuelvo.com.ar",
+                         "gestion-test.loresuelvo.com.ar", "com.loresuelvo.consumer.staging"]),
+            ("prod", ["api.loresuelvo.com.ar", "loresuelvo.com.ar www.loresuelvo.com.ar",
+                      "gestion.loresuelvo.com.ar", "com.loresuelvo.consumer"]),
+        ):
+            with self.subTest(environment=environment):
+                result = subprocess.run(
+                    ["bash", "--noprofile", "--norc", "-euc",
+                     'source "$1"; printf "%s\\n" "$API_SERVER_NAMES" "$WEB_SERVER_NAMES" '
+                     '"$ADMIN_SERVER_NAMES" "$ANDROID_APP_LINK_PACKAGE_NAME"',
+                     "gateway-config-test", f"deploy/gateway/config/{environment}.conf"],
+                    check=True, capture_output=True, text=True,
+                )
+                self.assertEqual(result.stdout.splitlines(), expected)
+
     def test_inventory_and_exact_new_nodes(self):
         value = {
             "replica_names": {"value": ["staging-replica-01", "staging-replica-02"]},
