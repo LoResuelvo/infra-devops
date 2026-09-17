@@ -87,8 +87,6 @@ jobs:
       - name: Deploy and verify gateway
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT: >-
-            ${{ vars.ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT }}
         run: |
           config=staging
           [[ "$ENVIRONMENT" != production ]] || config=prod

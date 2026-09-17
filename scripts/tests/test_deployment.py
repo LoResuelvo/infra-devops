@@ -17,15 +17,18 @@ class DeploymentTests(unittest.TestCase):
     def test_gateway_configuration_loads_in_shell(self):
         for environment, expected in (
             ("staging", ["api-test.loresuelvo.com.ar", "test.loresuelvo.com.ar",
-                         "gestion-test.loresuelvo.com.ar", "com.loresuelvo.consumer.staging"]),
+                         "gestion-test.loresuelvo.com.ar", "com.loresuelvo.consumer.staging",
+                         ":".join(["00"] * 32)]),
             ("prod", ["api.loresuelvo.com.ar", "loresuelvo.com.ar www.loresuelvo.com.ar",
-                      "gestion.loresuelvo.com.ar", "com.loresuelvo.consumer"]),
+                      "gestion.loresuelvo.com.ar", "com.loresuelvo.consumer",
+                      ":".join(["00"] * 32)]),
         ):
             with self.subTest(environment=environment):
                 result = subprocess.run(
                     ["bash", "--noprofile", "--norc", "-euc",
                      'source "$1"; printf "%s\\n" "$API_SERVER_NAMES" "$WEB_SERVER_NAMES" '
-                     '"$ADMIN_SERVER_NAMES" "$ANDROID_APP_LINK_PACKAGE_NAME"',
+                     '"$ADMIN_SERVER_NAMES" "$ANDROID_APP_LINK_PACKAGE_NAME" '
+                     '"$ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT"',
                      "gateway-config-test", f"deploy/gateway/config/{environment}.conf"],
                     check=True, capture_output=True, text=True,
                 )

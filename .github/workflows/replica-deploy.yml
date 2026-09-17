@@ -170,8 +170,6 @@ jobs:
       - name: Deploy gateway to replicas
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT: >-
-            ${{ vars.ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT }}
         run: |
           source "$RUNNER_TEMP/releases.env"
           gateway_root="$GITHUB_WORKSPACE"

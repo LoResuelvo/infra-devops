@@ -30,15 +30,16 @@ with tempfile.TemporaryDirectory() as directory:
         config = subprocess.run(
             ["bash", "--noprofile", "--norc", "-euc",
              'source "$1"; printf "%s\\n" "$API_SERVER_NAMES" "$WEB_SERVER_NAMES" '
-             '"$ADMIN_SERVER_NAMES" "$ANDROID_APP_LINK_PACKAGE_NAME"',
+             '"$ADMIN_SERVER_NAMES" "$ANDROID_APP_LINK_PACKAGE_NAME" '
+             '"$ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT"',
              "gateway-config", str(gateway / "config" / f"{name}.conf")],
             check=True, capture_output=True, text=True,
         )
         values = dict(zip(
-            ("api_server_names", "web_server_names", "admin_server_names", "android_app_link_package_name"),
+            ("api_server_names", "web_server_names", "admin_server_names",
+             "android_app_link_package_name", "android_app_link_sha256_cert_fingerprint"),
             config.stdout.splitlines(), strict=True,
         ))
-        values["android_app_link_sha256_cert_fingerprint"] = ":".join(["AA"] * 32)
         rendered = root / name
         rendered.mkdir()
         for filename in ("default.conf", "assetlinks.json"):
