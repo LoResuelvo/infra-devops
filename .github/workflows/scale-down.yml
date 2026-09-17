@@ -1,0 +1,64 @@
+name: Scale DOWN
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+      terraform-root:
+        type: string
+        required: true
+      desired-replica-count:
+        type: number
+        required: true
+      current-replica-count:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  deployments: read
+
+jobs:
+  drain:
+    name: Disable and drain origins in Cloudflare
+    uses: ./.github/workflows/sync-load-balancer.yml
+    with:
+      environment: ${{ inputs.environment }}
+      replicas-terraform-root: ${{ inputs.terraform-root }}
+      active-replica-count: ${{ inputs.desired-replica-count }}
+      mode: drain
+    secrets: inherit
+
+  destroy:
+    name: Destroy drained VMs
+    needs: drain
+    uses: ./.github/workflows/replica-apply.yml
+    with:
+      environment: ${{ inputs.environment }}
+      terraform-root: ${{ inputs.terraform-root }}
+      desired-replica-count: ${{ inputs.desired-replica-count }}
+      expected-current-count: ${{ inputs.current-replica-count }}
+    secrets: inherit
+
+  remove:
+    name: Remove destroyed origins from Cloudflare
+    needs: destroy
+    uses: ./.github/workflows/sync-load-balancer.yml
+    with:
+      environment: ${{ inputs.environment }}
+      replicas-terraform-root: ${{ inputs.terraform-root }}
+      active-replica-count: ${{ inputs.desired-replica-count }}
+      mode: remove
+    secrets: inherit
+
+  verify:
+    name: Verify surviving deployments
+    needs: remove
+    uses: ./.github/workflows/replica-verify.yml
+    with:
+      environment: ${{ inputs.environment }}
+      terraform-root: ${{ inputs.terraform-root }}
+    secrets: inherit

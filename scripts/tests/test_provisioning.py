@@ -77,10 +77,14 @@ class ProvisioningTests(unittest.TestCase):
                 self.assertEqual(releases.latest_successful("gateway", "production", "https://api.test"), (tag, image))
 
     def test_scaling_orders_activation_and_drain_around_vm_changes(self):
-        workflow = Path(".github/workflows/provision-replicas-internal.yml").read_text()
-        self.assertIn("needs: [plan, verify-grow]", workflow)
-        self.assertIn("needs: [plan, drain-shrink]", workflow)
-        self.assertIn("needs: [plan, apply-shrink]", workflow)
+        orchestrator = Path(".github/workflows/provision-replicas.yml").read_text()
+        up = Path(".github/workflows/scale-up.yml").read_text()
+        down = Path(".github/workflows/scale-down.yml").read_text()
+        self.assertEqual(orchestrator.count("needs.plan.outputs.decision =="), 2)
+        self.assertNotIn("outputs.decision", up + down)
+        self.assertLess(up.index("needs: deploy"), up.index("needs: verify"))
+        self.assertLess(down.index("needs: drain"), down.index("needs: destroy"))
+        self.assertLess(down.index("needs: destroy"), down.index("needs: remove"))
 
         sync = Path(".github/workflows/sync-load-balancer.yml").read_text()
         self.assertLess(sync.index('.enabled == false'), sync.index('sleep "$DRAIN_SECONDS"'))
