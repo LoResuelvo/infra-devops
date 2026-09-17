@@ -38,11 +38,6 @@ jobs:
             '${{ inputs.image-ref }}' \
             '${{ inputs.release-tag }}'
 
-      - uses: hashicorp/setup-terraform@v3.1.2
-        with:
-          terraform_version: 1.16.1
-          terraform_wrapper: false
-
       - name: Fetch Terraform credentials
         uses: Infisical/secrets-action@v1.0.17
         with:
@@ -53,6 +48,11 @@ jobs:
           secret-path: /infrastructure
           include-imports: false
           recursive: false
+
+      - uses: ./.github/actions/setup-terraform
+        with:
+          environment: ${{ inputs.environment }}
+          terraform-root: terraform/environments/${{ inputs.environment }}/replicas
 
       - name: Fetch deployment credentials
         uses: Infisical/secrets-action@v1.0.17
@@ -65,32 +65,12 @@ jobs:
           include-imports: false
           recursive: false
 
-      - name: Install Ansible
-        run: |
-          python3 -m venv "$RUNNER_TEMP/ansible"
-          "$RUNNER_TEMP/ansible/bin/pip" install ansible-core==2.21.3
-          "$RUNNER_TEMP/ansible/bin/ansible-galaxy" collection install -r ansible/requirements.yml
-          echo "$RUNNER_TEMP/ansible/bin" >> "$GITHUB_PATH"
-
-      - name: Initialize Terraform
-        env:
-          ENVIRONMENT: ${{ inputs.environment }}
-        run: |
-          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
-          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-          export AWS_ENDPOINT_URL_S3="$R2_ENDPOINT"
-          terraform -chdir="terraform/environments/$ENVIRONMENT/replicas" init \
-            -input=false \
-            -reconfigure \
-            -backend-config="bucket=loresuelvo-terraform-state-$ENVIRONMENT"
+      - uses: ./.github/actions/setup-ansible
 
       - name: Generate private deployment files
         env:
           ENVIRONMENT: ${{ inputs.environment }}
         run: |
-          export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
-          export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
-          export AWS_ENDPOINT_URL_S3="$R2_ENDPOINT"
           terraform -chdir="terraform/environments/$ENVIRONMENT/replicas" output -json \
             > "$RUNNER_TEMP/hosts.json"
           python3 scripts/deployment.py inventory \

@@ -1,28 +1,60 @@
 name: Configure replicas
+
 on:
   workflow_call:
     inputs:
-      environment: {type: string, required: true}
-      terraform-root: {type: string, required: true}
-      previous-replica-count: {type: string, required: true}
-      desired-replica-count: {type: number, required: true}
-permissions: {contents: read, id-token: write}
+      environment:
+        type: string
+        required: true
+      terraform-root:
+        type: string
+        required: true
+      previous-replica-count:
+        type: string
+        required: true
+      desired-replica-count:
+        type: number
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   configure:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
       - name: Fetch infrastructure secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /infrastructure, include-imports: false, recursive: false}
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /infrastructure
+          include-imports: false
+          recursive: false
+
       - uses: ./.github/actions/setup-terraform
         with:
           environment: ${{ inputs.environment }}
           terraform-root: ${{ inputs.terraform-root }}
+
       - name: Fetch deployment secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /deployments, include-imports: false, recursive: false}
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /deployments
+          include-imports: false
+          recursive: false
+
       - uses: ./.github/actions/setup-ansible
+
       - name: Generate setup inventory
         env:
           ENVIRONMENT: ${{ inputs.environment }}
@@ -31,11 +63,30 @@ jobs:
           DESIRED_COUNT: ${{ inputs.desired-replica-count }}
         run: |
           terraform -chdir="$TERRAFORM_ROOT" output -json > "$RUNNER_TEMP/hosts.json"
-          python3 scripts/deployment.py new-inventory "$RUNNER_TEMP/hosts.json" "$RUNNER_TEMP/inventory.json" "$ENVIRONMENT" "$PREVIOUS_COUNT" "$DESIRED_COUNT"
+          python3 scripts/deployment.py new-inventory \
+            "$RUNNER_TEMP/hosts.json" \
+            "$RUNNER_TEMP/inventory.json" \
+            "$ENVIRONMENT" \
+            "$PREVIOUS_COUNT" \
+            "$DESIRED_COUNT"
           python3 scripts/deployment.py keys "$RUNNER_TEMP/deploy-keys.json"
           printf '%s\n' "$OPERATOR_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/operator-key"
           chmod 0600 "$RUNNER_TEMP/operator-key"
+
       - name: Configure nodes
-        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/operator-key" -e @"$RUNNER_TEMP/deploy-keys.json" -e environment_name='${{ inputs.environment }}' ansible/playbooks/configure-application-nodes.yml
+        run: |
+          ansible-playbook \
+            -i "$RUNNER_TEMP/inventory.json" \
+            --private-key "$RUNNER_TEMP/operator-key" \
+            -e @"$RUNNER_TEMP/deploy-keys.json" \
+            -e environment_name='${{ inputs.environment }}' \
+            ansible/playbooks/configure-application-nodes.yml
+
       - name: Verify node configuration
-        run: ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/operator-key" -e @"$RUNNER_TEMP/deploy-keys.json" -e environment_name='${{ inputs.environment }}' ansible/playbooks/verify-application-nodes.yml
+        run: |
+          ansible-playbook \
+            -i "$RUNNER_TEMP/inventory.json" \
+            --private-key "$RUNNER_TEMP/operator-key" \
+            -e @"$RUNNER_TEMP/deploy-keys.json" \
+            -e environment_name='${{ inputs.environment }}' \
+            ansible/playbooks/verify-application-nodes.yml

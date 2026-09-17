@@ -2,34 +2,85 @@ name: Deploy replicas
 on:
   workflow_call:
     inputs:
-      environment: {type: string, required: true}
-      terraform-root: {type: string, required: true}
-      previous-replica-count: {type: string, required: true}
-      desired-replica-count: {type: number, required: true}
-permissions: {contents: read, id-token: write}
+      environment:
+        type: string
+        required: true
+      terraform-root:
+        type: string
+        required: true
+      previous-replica-count:
+        type: string
+        required: true
+      desired-replica-count:
+        type: number
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@v6
+
       - name: Fetch infrastructure secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /infrastructure, include-imports: false, recursive: false}
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /infrastructure
+          include-imports: false
+          recursive: false
+
       - uses: ./.github/actions/setup-terraform
         with:
           environment: ${{ inputs.environment }}
           terraform-root: ${{ inputs.terraform-root }}
+  
       - name: Fetch deployment secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /deployments, include-imports: false, recursive: false}
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /deployments
+          include-imports: false
+          recursive: false
+
       - name: Export API secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /api, include-imports: false, recursive: false, export-type: file, file-output-path: /api.env}
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /api
+          include-imports: false
+          recursive: false
+          export-type: file
+          file-output-path: /api.env
+
       - name: Export Web App secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /webapp, include-imports: false, recursive: false, export-type: file, file-output-path: /webapp.env}
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /webapp
+          include-imports: false
+          recursive: false
+          export-type: file
+          file-output-path: /webapp.env
+
       - uses: ./.github/actions/setup-ansible
+
       - name: Generate deployment inventory
         env:
           ENVIRONMENT: ${{ inputs.environment }}
@@ -38,16 +89,26 @@ jobs:
           DESIRED_COUNT: ${{ inputs.desired-replica-count }}
         run: |
           terraform -chdir="$TERRAFORM_ROOT" output -json > "$RUNNER_TEMP/hosts.json"
-          python3 scripts/deployment.py new-inventory "$RUNNER_TEMP/hosts.json" "$RUNNER_TEMP/inventory.json" "$ENVIRONMENT" "$PREVIOUS_COUNT" "$DESIRED_COUNT" --user deploy
+          python3 scripts/deployment.py new-inventory \
+            "$RUNNER_TEMP/hosts.json" \
+            "$RUNNER_TEMP/inventory.json" \
+            "$ENVIRONMENT" \
+            "$PREVIOUS_COUNT" \
+            "$DESIRED_COUNT" \
+            --user deploy
           printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/deploy-key"
           printf '%s\n' "$CLOUDFLARE_ORIGIN_CERT" > "$RUNNER_TEMP/origin.crt"
           printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$RUNNER_TEMP/origin.key"
-          chmod 0600 "$RUNNER_TEMP"/{deploy-key,origin.crt,origin.key} "$GITHUB_WORKSPACE"/{api.env,webapp.env}
+          chmod 0600 \
+            "$RUNNER_TEMP"/{deploy-key,origin.crt,origin.key} \
+            "$GITHUB_WORKSPACE"/{api.env,webapp.env}
+
       - name: Download scale metadata
         uses: actions/download-artifact@v4
         with:
           name: replica-scale-metadata-${{ github.run_id }}
           path: ${{ runner.temp }}/scale-metadata
+
       - name: Resolve deployed releases
         id: releases
         env:
@@ -70,22 +131,47 @@ jobs:
         with:
           ref: ${{ steps.releases.outputs.gateway-tag }}
           path: gateway-release
+
       - name: Hydrate API
-        env: {ENVIRONMENT: "${{ inputs.environment }}"}
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           source "$RUNNER_TEMP/releases.env"
-          config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
-          ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-api.yml -e environment_name="$ENVIRONMENT" -e image_ref="$API_IMAGE_REF" -e release_tag="$API_RELEASE_TAG" -e config_file="deploy/api/config/$config.conf" -e secrets_file="$GITHUB_WORKSPACE/api.env" -e deployment_mode=hydrate
+          config=staging
+          [[ "$ENVIRONMENT" != production ]] || config=prod
+          ansible-playbook \
+            -i "$RUNNER_TEMP/inventory.json" \
+            --private-key "$RUNNER_TEMP/deploy-key" \
+            ansible/playbooks/deploy-api.yml \
+            -e environment_name="$ENVIRONMENT" \
+            -e image_ref="$API_IMAGE_REF" \
+            -e release_tag="$API_RELEASE_TAG" \
+            -e config_file="deploy/api/config/$config.conf" \
+            -e secrets_file="$GITHUB_WORKSPACE/api.env" \
+            -e deployment_mode=hydrate
       - name: Hydrate Web App
-        env: {ENVIRONMENT: "${{ inputs.environment }}"}
+
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           source "$RUNNER_TEMP/releases.env"
-          config=staging; [[ "$ENVIRONMENT" != production ]] || config=prod
-          ansible-playbook -i "$RUNNER_TEMP/inventory.json" --private-key "$RUNNER_TEMP/deploy-key" ansible/playbooks/deploy-webapp.yml -e environment_name="$ENVIRONMENT" -e image_ref="$WEBAPP_IMAGE_REF" -e release_tag="$WEBAPP_RELEASE_TAG" -e config_file="deploy/webapp/config/$config.conf" -e secrets_file="$GITHUB_WORKSPACE/webapp.env"
+          config=staging
+          [[ "$ENVIRONMENT" != production ]] || config=prod
+          ansible-playbook \
+            -i "$RUNNER_TEMP/inventory.json" \
+            --private-key "$RUNNER_TEMP/deploy-key" \
+            ansible/playbooks/deploy-webapp.yml \
+            -e environment_name="$ENVIRONMENT" \
+            -e image_ref="$WEBAPP_IMAGE_REF" \
+            -e release_tag="$WEBAPP_RELEASE_TAG" \
+            -e config_file="deploy/webapp/config/$config.conf" \
+            -e secrets_file="$GITHUB_WORKSPACE/webapp.env"
+
       - name: Deploy gateway to replicas
         env:
           ENVIRONMENT: ${{ inputs.environment }}
-          ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT: ${{ vars.ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT }}
+          ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT: >-
+            ${{ vars.ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT }}
         run: |
           source "$RUNNER_TEMP/releases.env"
           gateway_root="$GITHUB_WORKSPACE"

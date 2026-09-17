@@ -2,29 +2,54 @@ name: Apply replica topology
 on:
   workflow_call:
     inputs:
-      environment: {type: string, required: true}
-      terraform-root: {type: string, required: true}
-      desired-replica-count: {type: number, required: true}
-      expected-current-count: {type: string, required: true}
-permissions: {contents: read, id-token: write}
+      environment:
+        type: string
+        required: true
+      terraform-root:
+        type: string
+        required: true
+      desired-replica-count:
+        type: number
+        required: true
+      expected-current-count:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   apply:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment == 'production' && 'production-infrastructure' || 'staging' }}
+    environment: >-
+      ${{ inputs.environment == 'production' &&
+      'production-infrastructure' || 'staging' }}
     steps:
       - uses: actions/checkout@v6
+
       - name: Fetch infrastructure secrets
         uses: Infisical/secrets-action@v1.0.17
-        with: {method: oidc, identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972, project-slug: lo-resuelvo-7j-te, env-slug: "${{ inputs.environment }}", secret-path: /infrastructure, include-imports: false, recursive: false}
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /infrastructure
+          include-imports: false
+          recursive: false
+
       - uses: ./.github/actions/setup-terraform
         with:
           environment: ${{ inputs.environment }}
           terraform-root: ${{ inputs.terraform-root }}
+
       - name: Download scale metadata
         uses: actions/download-artifact@v4
         with:
           name: replica-scale-metadata-${{ github.run_id }}
           path: ${{ runner.temp }}/scale-metadata
+
       - name: Revalidate state
         id: state
         env:
@@ -32,13 +57,24 @@ jobs:
           DESIRED_COUNT: ${{ inputs.desired-replica-count }}
           EXPECTED_COUNT: ${{ inputs.expected-current-count }}
         run: |
-          EXPECTED_FINGERPRINT=$(sed -n 's/^state-fingerprint=//p' "$RUNNER_TEMP/scale-metadata/scale-metadata.env")
+          EXPECTED_FINGERPRINT=$(sed -n \
+            's/^state-fingerprint=//p' \
+            "$RUNNER_TEMP/scale-metadata/scale-metadata.env")
           state_json=$(terraform -chdir="$TERRAFORM_ROOT" output -json)
           current_count=0
-          [[ "$state_json" == '{}' ]] || current_count=$(terraform -chdir="$TERRAFORM_ROOT" output -raw replica_count)
+          if [[ "$state_json" != '{}' ]]; then
+            current_count=$(terraform -chdir="$TERRAFORM_ROOT" output -raw replica_count)
+          fi
           current_fingerprint=$(printf '%s\n' "$state_json" | sha256sum | cut -d' ' -f1)
-          mode=$(python3 scripts/provisioning/validate-replica-change.py state "$EXPECTED_COUNT" "$current_count" "$DESIRED_COUNT" "$EXPECTED_FINGERPRINT" "$current_fingerprint" '${{ github.run_attempt }}')
+          mode=$(python3 scripts/provisioning/validate-replica-change.py state \
+            "$EXPECTED_COUNT" \
+            "$current_count" \
+            "$DESIRED_COUNT" \
+            "$EXPECTED_FINGERPRINT" \
+            "$current_fingerprint" \
+            '${{ github.run_attempt }}')
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+
       - name: Recreate approved plan
         if: steps.state.outputs.mode == 'apply'
         env:
@@ -47,10 +83,28 @@ jobs:
           DESIRED_COUNT: ${{ inputs.desired-replica-count }}
           CURRENT_COUNT: ${{ inputs.expected-current-count }}
         run: |
-          terraform -chdir="$TERRAFORM_ROOT" plan -input=false -out="$RUNNER_TEMP/replicas.tfplan" -var="replica_count=$DESIRED_COUNT" >"$RUNNER_TEMP/terraform-plan.log" 2>&1
-          terraform -chdir="$TERRAFORM_ROOT" show -json "$RUNNER_TEMP/replicas.tfplan" > "$RUNNER_TEMP/plan.json"
-          python3 scripts/provisioning/validate-replica-change.py plan "$RUNNER_TEMP/plan.json" "$ENVIRONMENT" "$CURRENT_COUNT" "$DESIRED_COUNT" >/dev/null
+          terraform -chdir="$TERRAFORM_ROOT" plan \
+            -input=false \
+            -out="$RUNNER_TEMP/replicas.tfplan" \
+            -var="replica_count=$DESIRED_COUNT" \
+            >"$RUNNER_TEMP/terraform-plan.log" 2>&1
+          terraform -chdir="$TERRAFORM_ROOT" show -json \
+            "$RUNNER_TEMP/replicas.tfplan" \
+            > "$RUNNER_TEMP/plan.json"
+          python3 scripts/provisioning/validate-replica-change.py plan \
+            "$RUNNER_TEMP/plan.json" \
+            "$ENVIRONMENT" \
+            "$CURRENT_COUNT" \
+            "$DESIRED_COUNT" \
+            >/dev/null
+
       - name: Apply topology
         if: steps.state.outputs.mode == 'apply'
-        env: {TERRAFORM_ROOT: "${{ inputs.terraform-root }}"}
-        run: terraform -chdir="$TERRAFORM_ROOT" apply -input=false -auto-approve "$RUNNER_TEMP/replicas.tfplan" >"$RUNNER_TEMP/terraform-apply.log" 2>&1
+        env:
+          TERRAFORM_ROOT: ${{ inputs.terraform-root }}
+        run: |
+          terraform -chdir="$TERRAFORM_ROOT" apply \
+            -input=false \
+            -auto-approve \
+            "$RUNNER_TEMP/replicas.tfplan" \
+            >"$RUNNER_TEMP/terraform-apply.log" 2>&1

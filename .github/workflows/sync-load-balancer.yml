@@ -31,7 +31,9 @@ jobs:
   sync:
     name: ${{ inputs.mode }} Cloudflare endpoints
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment == 'production' && 'production-infrastructure' || 'staging' }}
+    environment: >-
+      ${{ inputs.environment == 'production' &&
+      'production-infrastructure' || 'staging' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -59,9 +61,12 @@ jobs:
         run: |
           terraform -chdir="$REPLICAS_ROOT" output -json > "$RUNNER_TEMP/replicas.json"
 
+          pool_url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID"
+          pool_url="$pool_url/load_balancers/pools/$CLOUDFLARE_POOL_ID"
+          echo "CLOUDFLARE_POOL_URL=$pool_url" >> "$GITHUB_ENV"
           curl --silent --show-error --fail-with-body \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/load_balancers/pools/$CLOUDFLARE_POOL_ID" \
+            "$pool_url" \
             > "$RUNNER_TEMP/pool.json"
 
       - name: Update managed endpoints
@@ -83,7 +88,7 @@ jobs:
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             --header "Content-Type: application/json" \
             --data @"$RUNNER_TEMP/origins.json" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/load_balancers/pools/$CLOUDFLARE_POOL_ID" \
+            "$CLOUDFLARE_POOL_URL" \
             | jq -e '.success' >/dev/null
 
       - name: Confirm disabled endpoints and drain
@@ -104,7 +109,7 @@ jobs:
           for _attempt in {1..12}; do
             response=$(curl --silent --show-error --fail-with-body \
               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/load_balancers/pools/$CLOUDFLARE_POOL_ID")
+              "$CLOUDFLARE_POOL_URL")
 
             if jq -e --arg environment "$ENVIRONMENT" --argjson expected "$expected" '
               [.result.origins[] |
@@ -134,7 +139,7 @@ jobs:
           for _attempt in {1..30}; do
             response=$(curl --silent --show-error --fail-with-body \
               --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/load_balancers/pools/$CLOUDFLARE_POOL_ID")
+              "$CLOUDFLARE_POOL_URL")
 
             if jq -e --arg environment "$ENVIRONMENT" --argjson expected "$ACTIVE_REPLICAS" '
               [.result.origins[] |
