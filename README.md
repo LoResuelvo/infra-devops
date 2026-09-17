@@ -56,6 +56,15 @@ locking nativo por archivo: `loresuelvo-terraform-state-staging` y
 `loresuelvo-terraform-state-production`. Endpoint y credenciales nunca se
 versionan.
 
+## Releases del gateway
+
+Un tag `vX.Y.Z` ejecuta CI, publica la imagen inmutable del gateway y despliega
+el mismo digest en staging y producción. Producción requiere la aprobación de
+su GitHub Environment. La imagen sólo fija nginx; las configuraciones y
+plantillas públicas pertenecen al tag. Al escalar se recupera el tag desplegado
+en cada ambiente, por lo que cambios posteriores en `main` no alteran réplicas
+de una release anterior.
+
 ## Bootstrap y configuración
 
 Cloud-init solo deja Ubuntu administrable como `ubuntu`: actualización inicial,

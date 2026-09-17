@@ -99,11 +99,13 @@ la variable pública `ANDROID_APP_LINK_SHA256_CERT_FINGERPRINT` con la huella de
 certificado que firma la aplicación de ese ambiente.
 Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
 modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.
-La versión de configuración correspondiente es `2026-09-10.1`. Cada despliegue
-publica tag y digest inmutable en la URL de su GitHub Deployment. El alta de
-réplicas consulta el último Deployment exitoso de API, Web App y gateway para
-el ambiente. El modo `hydrate` de la API instala un nodo nuevo sin ejecutar
-migraciones; estas siguen perteneciendo únicamente al despliegue normal.
+La imagen del gateway contiene únicamente nginx fijado por digest. Un tag
+`vX.Y.Z` versiona la imagen junto con Compose, plantillas y configuración
+pública, y publica el digest inmutable en la URL de su GitHub Deployment. El
+alta de réplicas consulta el último Deployment exitoso de cada componente y,
+para el gateway, obtiene esos archivos desde el tag registrado. El modo
+`hydrate` de la API instala un nodo nuevo sin ejecutar migraciones; estas siguen
+perteneciendo únicamente al despliegue normal.
 El chequeo de Admin valida la ruta y virtual host del gateway; la aplicación
 Admin tiene un lifecycle de despliegue separado y no forma parte de esta alta.
 Las comprobaciones locales del flujo se ejecutan con

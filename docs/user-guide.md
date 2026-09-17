@@ -102,9 +102,13 @@ misma cantidad se considera sin cambios y no reconfigura nodos.
 Cada deploy exitoso publica en su GitHub Deployment el tag y la referencia por
 digest mediante `environment.url`. Antes de la primera alta deben haberse
 ejecutado al menos una vez los workflows actualizados de API, Web App y gateway
-en el ambiente. El gateway se dispara indicando explícitamente
-`release-tag` e `image-ref`; API y Web App reciben esos datos desde sus
-workflows de release.
+en el ambiente. Para publicar el gateway, crear y subir un tag `vX.Y.Z`: el
+pipeline ejecuta CI, publica la imagen, despliega staging y espera la aprobación
+de producción. El mismo digest se promueve entre ambos ambientes.
+
+Durante un alta, el gateway usa Compose, plantillas y configuración del tag
+registrado como exitoso para ese ambiente. Los cambios posteriores en `main` no
+afectan a las nuevas réplicas hasta publicar y desplegar otra release.
 
 En Infisical, para cada ambiente, usar rutas consistentes:
 
