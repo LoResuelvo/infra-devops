@@ -1,0 +1,15 @@
+name: Set up Ansible
+description: Install the pinned Ansible runtime and collections
+
+runs:
+  using: composite
+  steps:
+    - name: Install Ansible
+      shell: bash
+      run: |
+        python3 -m venv "$RUNNER_TEMP/ansible"
+        "$RUNNER_TEMP/ansible/bin/pip" install ansible-core==2.21.3 >/dev/null
+        "$RUNNER_TEMP/ansible/bin/ansible-galaxy" collection install \
+          -r ansible/requirements.yml \
+          >/dev/null
+        echo "$RUNNER_TEMP/ansible/bin" >> "$GITHUB_PATH"

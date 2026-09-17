@@ -1,0 +1,42 @@
+name: Set up Terraform
+description: Configure Terraform and initialize an environment backend
+
+inputs:
+  environment:
+    required: true
+    description: Infrastructure environment
+  terraform-root:
+    required: true
+    description: Terraform root to initialize
+
+runs:
+  using: composite
+  steps:
+    - uses: hashicorp/setup-terraform@v3.1.2
+      with:
+        terraform_version: 1.16.1
+        terraform_wrapper: false
+
+    - name: Initialize Terraform
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        TERRAFORM_ROOT: ${{ inputs.terraform-root }}
+      run: |
+        echo "::add-mask::$TF_PUBLIC_NETWORK_ID"
+        {
+          echo "AWS_ACCESS_KEY_ID=$R2_ACCESS_KEY_ID"
+          echo "AWS_SECRET_ACCESS_KEY=$R2_SECRET_ACCESS_KEY"
+          echo "AWS_ENDPOINT_URL_S3=$R2_ENDPOINT"
+          echo "TF_VAR_public_network_id=$TF_PUBLIC_NETWORK_ID"
+          echo "TF_VAR_operator_ssh_public_key=$OPERATOR_SSH_PUBLIC_KEY"
+        } >> "$GITHUB_ENV"
+
+        export AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID"
+        export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
+        export AWS_ENDPOINT_URL_S3="$R2_ENDPOINT"
+        terraform -chdir="$TERRAFORM_ROOT" init \
+          -input=false \
+          -reconfigure \
+          -backend-config="bucket=loresuelvo-terraform-state-$ENVIRONMENT" \
+          >/dev/null
