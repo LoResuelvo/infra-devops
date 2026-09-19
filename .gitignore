@@ -47,3 +47,6 @@ ansible/vars/deploy-keys-staging.yml
 ansible/vars/deploy-keys-production.yml
 ansible/collections/
 *.retry
+
+# Local performance reports and raw results
+/results/

@@ -1,0 +1,69 @@
+{
+  "title": "LoResuelvo — campaña de lecturas",
+  "tabs": [
+    {
+      "id": "read-campaign",
+      "title": "Lecturas",
+      "summary": "Métricas por operación y por solicitud. Las ventanas de recuperación de 15 s se evalúan en summary.json.",
+      "sections": [
+        {
+          "id": "load",
+          "title": "Carga completada",
+          "panels": [
+            {
+              "id": "operation-rate",
+              "title": "Operaciones por segundo",
+              "kind": "chart",
+              "series": [{ "query": "operations[?!tags && rate]" }]
+            },
+            {
+              "id": "request-rate",
+              "title": "Solicitudes HTTP por segundo",
+              "kind": "chart",
+              "series": [{ "query": "http_reqs[?!tags && rate]" }]
+            }
+          ]
+        },
+        {
+          "id": "latency",
+          "title": "Latencia",
+          "panels": [
+            {
+              "id": "operation-latency",
+              "title": "Duración de operación p95 / p99",
+              "kind": "chart",
+              "series": [{ "query": "operation_ms[?!tags && (p95 || p99)]" }]
+            },
+            {
+              "id": "request-latency",
+              "title": "Duración HTTP p95 / p99",
+              "kind": "chart",
+              "series": [{ "query": "http_req_duration[?!tags && (p95 || p99)]" }]
+            }
+          ]
+        },
+        {
+          "id": "failures",
+          "title": "Fallos y generador",
+          "panels": [
+            {
+              "id": "errors",
+              "title": "Proporción de fallos",
+              "kind": "chart",
+              "series": [
+                { "query": "operation_failed[?!tags && rate]" },
+                { "query": "http_req_failed[?!tags && rate]" }
+              ]
+            },
+            {
+              "id": "dropped",
+              "title": "Iteraciones descartadas",
+              "kind": "chart",
+              "series": [{ "query": "dropped_iterations[?!tags && rate]" }]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
