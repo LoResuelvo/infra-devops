@@ -8,6 +8,9 @@ const run = JSON.parse(open('/private/plan.json'));
 const operationDuration = new Trend('operation_ms', true);
 const operationFailures = new Rate('operation_failed');
 const completedOperations = new Counter('operations');
+const startedOperations = new Counter('operations_started');
+const failureKinds = new Counter('failure_kinds');
+let failureKind = 'none';
 
 export const options = {
   scenarios: { search: run.executor },
@@ -50,12 +53,19 @@ function get(path, metricName) {
   if (run.scenario === 'web') {
     headers.Cookie = config.cookie;
   }
+  if (run.profile === 'availability') {
+    // Remove edge affinity without changing the explicit consumer session.
+    http.cookieJar().clear(config[`${run.scenario}_url`]);
+  }
   const response = http.get(config[`${run.scenario}_url`] + path, {
     redirects: 0,
     timeout: '10s',
     headers,
     tags: { name: metricName },
   });
+  if (response.status === 0) failureKind = 'transport';
+  else if (response.status >= 500) failureKind = 'http_5xx';
+  else if (response.status !== 200) failureKind = 'http_other';
   abortInvalidMeasurement(response);
   return response;
 }
@@ -93,6 +103,8 @@ export default function search() {
   const categoryIndex = exec.scenario.iterationInTest % config.categories.length;
   const category = config.categories[categoryIndex];
   const startedAt = Date.now();
+  failureKind = 'none';
+  if (run.profile === 'availability') startedOperations.add(1);
   const success = run.scenario === 'api' ? searchApi(category) : searchWeb(category);
 
   const elapsedSeconds = (Date.now() - exec.scenario.startTime) / 1000;
@@ -100,6 +112,11 @@ export default function search() {
     failed: String(!success),
     window: String(Math.floor(elapsedSeconds / 15)),
   };
+  if (run.profile === 'availability') {
+    tags.started_ms = String(startedAt);
+    tags.failure_kind = success ? 'none' : (failureKind === 'none' ? 'content' : failureKind);
+    if (!success) failureKinds.add(1, { kind: tags.failure_kind });
+  }
   operationDuration.add(Date.now() - startedAt, tags);
   operationFailures.add(!success);
   completedOperations.add(1);

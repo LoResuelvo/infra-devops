@@ -9,6 +9,16 @@ const ARRIVAL_OPTIONS = {
 };
 
 export function buildPlan(profile, rate) {
+  if (profile === 'availability') {
+    if (![0.5, 1].includes(rate)) throw new Error('Availability rate must be 0.5 or 1');
+    return [[{
+      ...ARRIVAL_OPTIONS,
+      executor: 'constant-arrival-rate',
+      rate: rate * 2,
+      timeUnit: '2s',
+      duration: '1200s',
+    }, 1200, rate]];
+  }
   if (['sustained', 'spike'].includes(profile) && !VALIDATED_RATES.includes(rate)) {
     throw new Error('Use R confirmed by exploration');
   }

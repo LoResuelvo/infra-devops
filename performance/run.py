@@ -22,10 +22,10 @@ def parse_args():
     parser.add_argument("--nodes", type=int, choices=[1, 2], required=True)
     parser.add_argument(
         "--profile",
-        choices=["smoke", "warmup", "explore", "sustained", "spike"],
+        choices=["smoke", "warmup", "explore", "sustained", "spike", "availability"],
         required=True,
     )
-    parser.add_argument("--rate", type=int)
+    parser.add_argument("--rate", type=float)
     parser.add_argument("--history", help="Campaign directory under results/ containing prior remote summaries")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -101,6 +101,8 @@ def main():
         raise ValueError("Private consumer cookie required")
 
     runs = load_plan(args.profile, args.rate)
+    if args.profile == "availability" and (args.scenario != "web" or args.nodes != 2):
+        raise ValueError("Availability measures authenticated web traffic with two initial nodes")
     output = results_path(args.out)
     if args.dry_run:
         print(json.dumps(runs, indent=2))
