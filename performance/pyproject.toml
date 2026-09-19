@@ -1,0 +1,4 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["docker: ejecuta k6 en Docker contra localhost, sin solicitudes remotas"]
