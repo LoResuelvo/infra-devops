@@ -1,4 +1,5 @@
 import base64
+import datetime as dt
 import gzip
 import io
 import json
@@ -9,9 +10,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 
 from campaign.analysis import recovery_status, summarize
+from campaign.availability import analyze
 from campaign import configuration
 from campaign.configuration import check_history, load_config
-from campaign.docker_runner import IMAGE, load_plan, read_live_points, sustained_failures
+from campaign.docker_runner import IMAGE, load_plan, read_finished_points, read_live_points, sustained_failures
 from campaign.reports import aggregate
 from run import execute, safe_to_increase
 
@@ -226,8 +228,16 @@ def test_http_contract_and_private_exports(report_dir, config, server, scenario,
     SearchHandler.mode = mode
     folder = report_dir / "run"
     executor = dict(executor="shared-iterations", vus=1, iterations=2, maxDuration="10s")
-    result = execute(config, folder, metadata(scenario), executor, report_dir / "STOP")
+    profile = "availability" if scenario == "web" and mode == "ok" else "smoke"
+    result = execute(config, folder, metadata(scenario, profile), executor, report_dir / "STOP")
     assert result["valid"] == valid
+
+    if profile == "availability":
+        points, malformed = read_finished_points(folder / "points.jsonl")
+        operations = [point for point in points if point["metric"] == "operation_ms"]
+        assert not malformed
+        assert all(operation["data"]["tags"]["started_ms"] for operation in operations)
+        assert all(operation["data"]["tags"]["failure_kind"] == "none" for operation in operations)
 
     for filename in ("summary.json", "report.html", "points.jsonl", "k6-summary.json"):
         content = (folder / filename).read_text()
@@ -246,6 +256,7 @@ def test_http_contract_and_private_exports(report_dir, config, server, scenario,
         ("explore", None, 60, [1, 2, 5, 10, 20, 40]),
         ("sustained", 10, 180, [10, 10]),
         ("spike", 5, 180, [5]),
+        ("availability", .5, 1200, [.5]),
     ],
 )
 def test_k6_plan(profile, rate, seconds, rates):
@@ -286,6 +297,31 @@ def test_spike_executor(report_dir, config, server):
     )
     assert result["valid"]
     assert result["recovery"] == "inconclusive"
+
+
+def test_availability_phases_require_complete_continuous_load():
+    start = 1_700_000_000
+    points = [
+        {
+            "metric": "operation_ms",
+            "data": {
+                "time": dt.datetime.fromtimestamp(start + second + .1, dt.timezone.utc).isoformat(),
+                "value": 100,
+                "tags": {
+                    "started_ms": str((start + second) * 1000),
+                    "failed": "false",
+                    "failure_kind": "none",
+                },
+            },
+        }
+        for second in range(1200)
+    ]
+    result = analyze(points, start + 300, start + 600, 1, 0)
+    assert result["assessment"] == "passed"
+    assert set(result["phases"]) == {"before", "transition", "after"}
+
+    incomplete = analyze(points[:-10], start + 300, start + 600, 1, 0)
+    assert incomplete["assessment"] == "inconclusive"
 
 
 @pytest.mark.docker
