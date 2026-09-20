@@ -72,7 +72,7 @@ def summarize(points, metadata, exit_code):
     http_errors = metric_values(points, "http_req_failed")
     http_error_rate = statistics.mean(http_errors) if http_errors else 1
     p95 = percentile(durations, 0.95)
-    p95_limit = 1500
+    p95_limit = metadata.get("p95_limit_ms", 1500)
 
     valid = (
         bool(durations)

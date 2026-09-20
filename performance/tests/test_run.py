@@ -229,10 +229,15 @@ def test_http_contract_and_private_exports(report_dir, config, server, scenario,
     folder = report_dir / "run"
     executor = dict(executor="shared-iterations", vus=1, iterations=2, maxDuration="10s")
     profile = "availability" if scenario == "web" and mode == "ok" else "smoke"
-    result = execute(config, folder, metadata(scenario, profile), executor, report_dir / "STOP")
+    run_metadata = metadata(scenario, profile)
+    if profile == "availability":
+        run_metadata["p95_limit_ms"] = 2000
+    result = execute(config, folder, run_metadata, executor, report_dir / "STOP")
     assert result["valid"] == valid
 
     if profile == "availability":
+        k6_summary = json.loads((folder / "k6-summary.json").read_text())
+        assert "p(95)<2000" in k6_summary["metrics"]["operation_ms"]["thresholds"]
         points, malformed = read_finished_points(folder / "points.jsonl")
         operations = [point for point in points if point["metric"] == "operation_ms"]
         assert not malformed
@@ -322,6 +327,11 @@ def test_availability_phases_require_complete_continuous_load():
 
     incomplete = analyze(points[:-10], start + 300, start + 600, 1, 0)
     assert incomplete["assessment"] == "inconclusive"
+
+    for point in points:
+        point["data"]["value"] = 1700
+    assert not analyze(points, start + 300, start + 600, 1, 0)["passed"]
+    assert analyze(points, start + 300, start + 600, 1, 0, p95_limit_ms=2000)["passed"]
 
 
 @pytest.mark.docker

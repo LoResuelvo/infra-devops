@@ -19,7 +19,7 @@ export const options = {
   systemTags: ['status', 'method', 'name', 'scenario'],
   summaryTrendStats: ['med', 'p(95)', 'p(99)'],
   thresholds: {
-    operation_ms: ['p(95)<1500'],
+    operation_ms: [`p(95)<${run.p95_limit_ms || 1500}`],
     operation_failed: ['rate<0.01'],
     http_req_failed: ['rate<0.01'],
     dropped_iterations: ['count==0'],

@@ -26,6 +26,8 @@ def parse_args():
         required=True,
     )
     parser.add_argument("--rate", type=float)
+    parser.add_argument("--p95-limit-ms", type=int, choices=(1500, 2000), default=1500,
+                        help="SLO declarado antes de ejecutar; se conserva en los resultados")
     parser.add_argument("--history", help="Campaign directory under results/ containing prior remote summaries")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -47,6 +49,7 @@ def run_metadata(args, config, repetition, seconds, rate):
         "seconds": seconds,
         "offered_ops_s": rate if args.profile != "spike" else None,
         "reference_R": rate,
+        "p95_limit_ms": getattr(args, "p95_limit_ms", 1500),
         "repetition": repetition,
         "image": IMAGE,
         "timestamp": dt.datetime.now(dt.timezone.utc).isoformat(),

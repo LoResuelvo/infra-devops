@@ -31,7 +31,7 @@ def operations(points):
     return rows
 
 
-def phase_summary(rows, start, end, rate):
+def phase_summary(rows, start, end, rate, p95_limit_ms=1500):
     selected = [row for row in rows if start <= row["start"] < end]
     successes = sorted(row["end"] for row in rows if not row["failed"] and start <= row["end"] < end)
     gaps = [b - a for a, b in zip([start, *successes], [*successes, end])]
@@ -54,14 +54,15 @@ def phase_summary(rows, start, end, rate):
         "failure_kinds": dict(Counter(row["kind"] for row in selected if row["failed"])),
         "max_gap_without_success_s": max(gaps),
         "complete": complete,
-        "slo_met": bool(complete and selected and p95 < 1500 and error_rate < .01),
+        "slo_met": bool(complete and selected and p95 < p95_limit_ms and error_rate < .01),
         "continuity_observed": bool(complete and max(gaps) <= 10),
     }
 
 
-def analyze(points, drain_start, drain_end, rate, exit_code, malformed=False):
+def analyze(points, drain_start, drain_end, rate, exit_code, malformed=False, p95_limit_ms=1500):
     rows = operations(points)
-    result = {"rate": rate, "phases": {}, "assessment": "inconclusive", "passed": False}
+    result = {"rate": rate, "p95_limit_ms": p95_limit_ms, "phases": {},
+              "assessment": "inconclusive", "passed": False}
     if not rows:
         return dict(result, reason="no_operations")
 
@@ -75,7 +76,7 @@ def analyze(points, drain_start, drain_end, rate, exit_code, malformed=False):
         ("transition", drain_start, drain_end),
         ("after", drain_end, end),
     ):
-        result["phases"][name] = phase_summary(rows, phase_start, phase_end, rate)
+        result["phases"][name] = phase_summary(rows, phase_start, phase_end, rate, p95_limit_ms)
 
     result["transport_errors"] = network_errors(points)
     result["dropped"] = sum(metric_values(points, "dropped_iterations"))
@@ -121,6 +122,7 @@ def main():
         args.rate,
         summary["exit_code"],
         malformed,
+        summary.get("p95_limit_ms", 1500),
     )
     (run / "availability.json").write_text(json.dumps(result, indent=2) + "\n")
     print(result["assessment"])
