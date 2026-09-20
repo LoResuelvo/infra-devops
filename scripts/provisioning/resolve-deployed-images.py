@@ -37,26 +37,31 @@ def request_json(url: str) -> Any:
 
 def latest_successful(component: str, environment: str, api_url: str) -> tuple[str, str]:
     repository, tag_pattern, image_pattern = COMPONENTS[component]
-    query = urllib.parse.urlencode({"environment": environment, "per_page": 20})
-    deployments = request_json(f"{api_url}/repos/{repository}/deployments?{query}")
-    for deployment in deployments:
-        statuses = request_json(f'{api_url}/repos/{repository}/deployments/{deployment["id"]}/statuses?per_page=1')
-        if not statuses or statuses[0].get("state") != "success":
-            continue
-        environment_url = statuses[0].get("environment_url") or ""
-        parsed = urllib.parse.urlparse(environment_url)
-        if parsed.scheme != "https" or parsed.netloc != "github.com":
-            continue
-        try:
-            metadata = urllib.parse.parse_qs(parsed.fragment, strict_parsing=True)
-        except ValueError:
-            continue
-        if set(metadata) != {"release_tag", "image_ref"}:
-            continue
-        release_tag = metadata["release_tag"][0]
-        image_ref = metadata["image_ref"][0]
-        if re.fullmatch(tag_pattern, release_tag) and re.fullmatch(image_pattern, image_ref):
-            return release_tag, image_ref
+    page = 1
+    while True:
+        query = urllib.parse.urlencode({"environment": environment, "per_page": 20, "page": page})
+        deployments = request_json(f"{api_url}/repos/{repository}/deployments?{query}")
+        for deployment in deployments:
+            statuses = request_json(f'{api_url}/repos/{repository}/deployments/{deployment["id"]}/statuses?per_page=1')
+            if not statuses or statuses[0].get("state") != "success":
+                continue
+            environment_url = statuses[0].get("environment_url") or ""
+            parsed = urllib.parse.urlparse(environment_url)
+            if parsed.scheme != "https" or parsed.netloc != "github.com":
+                continue
+            try:
+                metadata = urllib.parse.parse_qs(parsed.fragment, strict_parsing=True)
+            except ValueError:
+                continue
+            if set(metadata) != {"release_tag", "image_ref"}:
+                continue
+            release_tag = metadata["release_tag"][0]
+            image_ref = metadata["image_ref"][0]
+            if re.fullmatch(tag_pattern, release_tag) and re.fullmatch(image_pattern, image_ref):
+                return release_tag, image_ref
+        if len(deployments) < 20:
+            break
+        page += 1
     raise SystemExit(f"No valid successful {component} deployment exists for {environment}.")
 
 

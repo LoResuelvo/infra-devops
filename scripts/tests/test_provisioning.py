@@ -76,6 +76,22 @@ class ProvisioningTests(unittest.TestCase):
             with self.subTest(tag=tag), patch.object(releases, "request_json", side_effect=responses):
                 self.assertEqual(releases.latest_successful("gateway", "production", "https://api.test"), (tag, image))
 
+    def test_release_resolution_continues_past_environment_job_records(self):
+        image = "ghcr.io/loresuelvo/gateway@sha256:" + "a" * 64
+        first_page = [{"id": number} for number in range(20)]
+        job_statuses = [[{"state": "success", "environment_url": ""}]] * 20
+        release = [{"state": "success", "environment_url":
+                    f"https://github.com/release#release_tag=v1.0.0&image_ref={image}"}]
+        responses = [first_page, *job_statuses, [{"id": 21}], release]
+        with patch.object(releases, "request_json", side_effect=responses) as request:
+            self.assertEqual(releases.latest_successful("gateway", "staging", "https://api.test"),
+                             ("v1.0.0", image))
+            self.assertIn("page=2", request.call_args_list[21].args[0])
+
+        with patch.object(releases, "request_json", side_effect=[first_page, *job_statuses, []]):
+            with self.assertRaisesRegex(SystemExit, "No valid successful gateway deployment"):
+                releases.latest_successful("gateway", "staging", "https://api.test")
+
     def test_scaling_orders_activation_and_drain_around_vm_changes(self):
         orchestrator = Path(".github/workflows/provision-replicas.yml").read_text()
         up = Path(".github/workflows/scale-up.yml").read_text()
