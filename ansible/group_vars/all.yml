@@ -26,7 +26,9 @@ application_deploy_directories:
   - path: /opt/loresuelvo/api
     mode: "0750"
   - path: /opt/loresuelvo/gateway
-    mode: "0750"
+    # The gateway container must traverse this bind-mount parent directory.
+    # Sensitive files keep restrictive permissions individually.
+    mode: "0755"
   - path: /opt/loresuelvo/gateway/nginx
     # Nginx workers must traverse the mounted directory to serve public
     # assetlinks.json; the files inside remain individually permissioned.
