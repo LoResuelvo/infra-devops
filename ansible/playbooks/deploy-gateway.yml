@@ -29,6 +29,17 @@
           - image_ref is match('^nginx@') or (ghcr_user | length > 0 and ghcr_token | length > 0)
       no_log: true
   tasks:
+    - name: Ensure gateway bind mount is traversable by nginx
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: deploy
+        group: deploy
+        mode: "0755"
+      loop:
+        - /opt/loresuelvo/gateway
+        - /opt/loresuelvo/gateway/nginx
+
     - name: Install gateway files
       ansible.builtin.copy:
         src: "{{ item.src }}"
