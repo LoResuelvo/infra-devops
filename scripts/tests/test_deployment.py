@@ -18,7 +18,7 @@ class DeploymentTests(unittest.TestCase):
         for environment, expected in (
             ("staging", ["api-test.loresuelvo.com.ar", "test.loresuelvo.com.ar",
                          "gestion-test.loresuelvo.com.ar", "com.loresuelvo.consumer.staging",
-                         ":".join(["00"] * 32)]),
+                         "10:F5:32:D3:22:40:BC:6D:E5:72:73:92:27:8E:E3:A7:22:73:47:9F:57:0E:94:45:04:AA:29:E7:09:17:D5:1A"]),
             ("prod", ["api.loresuelvo.com.ar", "loresuelvo.com.ar www.loresuelvo.com.ar",
                       "gestion.loresuelvo.com.ar", "com.loresuelvo.consumer",
                       ":".join(["00"] * 32)]),
