@@ -1,0 +1,56 @@
+name: Deploy Admin Web App
+
+on:
+  workflow_call:
+    inputs:
+      image-ref:
+        type: string
+        required: true
+      release-tag:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+  deployments: write
+
+jobs:
+  validate-inputs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout deployment code
+        uses: actions/checkout@v6
+        with:
+          repository: LoResuelvo/infra-devops
+          ref: main
+
+      - name: Validate caller and immutable release inputs
+        env:
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CALLER_REF_TYPE: ${{ github.ref_type }}
+          CALLER_TAG: ${{ github.ref_name }}
+          IMAGE_REF: ${{ inputs.image-ref }}
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          python3 scripts/deployment.py release admin-webapp \
+            "$CALLER_REPOSITORY" "$CALLER_REF_TYPE" "$CALLER_TAG" \
+            "$IMAGE_REF" "$RELEASE_TAG"
+
+  deploy-staging:
+    needs: validate-inputs
+    uses: ./.github/workflows/deploy-admin-webapp-environment.yml
+    with:
+      environment: staging
+      config-file: deploy/admin-webapp/config/staging.conf
+      image-ref: ${{ inputs.image-ref }}
+      release-tag: ${{ inputs.release-tag }}
+
+  deploy-production:
+    needs: deploy-staging
+    uses: ./.github/workflows/deploy-admin-webapp-environment.yml
+    with:
+      environment: production
+      config-file: deploy/admin-webapp/config/prod.conf
+      image-ref: ${{ inputs.image-ref }}
+      release-tag: ${{ inputs.release-tag }}

@@ -15,6 +15,7 @@ from typing import Any
 COMPONENTS = {
     "api": ("LoResuelvo/loresuelvo-api", r"^v\d+\.\d+\.\d+$", r"^ghcr\.io/loresuelvo/api@sha256:[a-f0-9]{64}$"),
     "webapp": ("LoResuelvo/loresuelvo-webapp", r"^v\d+\.\d+\.\d+$", r"^ghcr\.io/loresuelvo/webapp@sha256:[a-f0-9]{64}$"),
+    "admin-webapp": ("LoResuelvo/loresuelvo-admin-webapp", r"^v\d+\.\d+\.\d+$", r"^ghcr\.io/loresuelvo/gestion@sha256:[a-f0-9]{64}$"),
     "gateway": (
         "LoResuelvo/infra-devops",
         r"^(?:v\d+\.\d+\.\d+|\d+\.\d+\.\d+(?:-alpine)?)$",
@@ -74,7 +75,7 @@ def main() -> None:
     values: dict[str, str] = {}
     for component in COMPONENTS:
         tag, image = latest_successful(component, args.environment, api_url)
-        prefix = "WEBAPP" if component == "webapp" else component.upper()
+        prefix = component.upper().replace("-", "_")
         values[f"{prefix}_RELEASE_TAG"] = tag
         values[f"{prefix}_IMAGE_REF"] = image
     args.output.write_text("".join(f"{key}={value}\n" for key, value in values.items()), encoding="utf-8")

@@ -10,7 +10,7 @@
 | `application-node` | Crea keypair, VM, red y entrega `user_data`. |
 | Cloud-init | Deja Ubuntu accesible como `ubuntu` con Python, sudo y SSH seguro. |
 | Ansible | Configura usuario, Docker, firewall, actualizaciones y nodo. |
-| Deployments | Instalan API, Web App y gateway, y publican la versión activa. |
+| Deployments | Instalan API, Web App, Admin Web App y gateway, y publican la versión activa. |
 
 ## Topología y lifecycle
 
@@ -75,15 +75,16 @@ necesita Python y SSH. `ansible/requirements.yml` fija
 - `datadog_agent`: Agent 7 en Docker con métricas del host y contenedores y
   recolección de logs, etiquetados por ambiente y rol;
 - `deploy_user`: usuario sin contraseña, claves requeridas, grupo `docker`,
-  directorios de API/Web App/gateway con permisos restrictivos y ampliación de
-  `AllowUsers` a `ubuntu deploy`;
+  directorios de API/Web App/Admin Web App/gateway con permisos restrictivos
+  y ampliación de `AllowUsers` a `ubuntu deploy`;
 - `firewall`: UFW 22/80/443 y política persistente de `DOCKER-USER` que admite
   conexiones iniciadas por los bridges Docker, respuestas establecidas y
   tráfico web entrante, y descarta el resto.
 
-Ansible crea `app-network`, `/opt/loresuelvo/{api,gateway,webapp}` con modo
-`0750` y los directorios privados `/etc/loresuelvo/api`,
-`/etc/loresuelvo/gateway/tls` y `/etc/loresuelvo/webapp` con modo `0700`. Las
+Ansible crea `app-network`, `/opt/loresuelvo/{api,webapp,admin-webapp}` con modo
+`0750`, `/opt/loresuelvo/gateway` con modo `0755` y los directorios privados `/etc/loresuelvo/api`,
+`/etc/loresuelvo/gateway/tls`, `/etc/loresuelvo/webapp` y
+`/etc/loresuelvo/admin-webapp` con modo `0700`. Las
 claves solo se suministran desde `ansible/vars/deploy-keys-staging.yml` o
 `ansible/vars/deploy-keys-production.yml`, ambos ignorados. El mismo playbook y
 roles se usan para los dos ambientes; solo cambia la clave pública suministrada.
@@ -115,8 +116,13 @@ alta de réplicas consulta el último Deployment exitoso de cada componente y,
 para el gateway, obtiene esos archivos desde el tag registrado. El modo
 `hydrate` de la API instala un nodo nuevo sin ejecutar migraciones; estas siguen
 perteneciendo únicamente al despliegue normal.
-El chequeo de Admin valida la ruta y virtual host del gateway; la aplicación
-Admin tiene un lifecycle de despliegue separado y no forma parte de esta alta.
+Admin Web App usa el mismo flujo de despliegue secuencial que Web App, registra
+`CURRENT_RELEASE` después del healthcheck y publica tag y digest en GitHub
+Deployments. Su imagen es `ghcr.io/loresuelvo/gestion` y su servicio Compose
+`gestion`, compatible con el upstream existente del gateway. Cada réplica
+recibe también la última release exitosa de Admin Web App; su tag y digest
+participan en la huella de releases del escalado. La verificación exige HTTP
+200 en `/` del dominio Admin antes de habilitar las réplicas en el pool.
 Las comprobaciones locales del flujo se ejecutan con
 `python3 -m unittest discover -s scripts/tests`.
 

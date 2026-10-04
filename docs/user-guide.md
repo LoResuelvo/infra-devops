@@ -101,8 +101,8 @@ misma cantidad se considera sin cambios y no reconfigura nodos.
 
 Cada deploy exitoso publica en su GitHub Deployment el tag y la referencia por
 digest mediante `environment.url`. Antes de la primera alta deben haberse
-ejecutado al menos una vez los workflows actualizados de API, Web App y gateway
-en el ambiente. Para publicar el gateway, crear y subir un tag `vX.Y.Z`: el
+ejecutado al menos una vez los workflows actualizados de API, Web App,
+Admin Web App y gateway en el ambiente. Para publicar el gateway, crear y subir un tag `vX.Y.Z`: el
 pipeline ejecuta CI, publica la imagen, despliega staging y espera la aprobación
 de producción. El mismo digest se promueve entre ambos ambientes.
 
@@ -117,6 +117,7 @@ En Infisical, para cada ambiente, usar rutas consistentes:
 /deployments     # claves deploy, GHCR y certificado del gateway
 /api             # configuración privada de API
 /webapp          # configuración privada de Web App
+/admin-webapp    # configuración privada de Admin Web App
 ```
 
 `/infrastructure` debe incluir `DATADOG_API_KEY`, `TF_PRIMARY_INSTANCE_NAME`,
@@ -130,6 +131,30 @@ No se requieren GitHub Actions Variables para Terraform. Crear ambos buckets
 R2 privados y el environment GitHub `production-infrastructure` con aprobación
 requerida. No guardar cantidades de réplicas ni inventarios derivados en
 Infisical.
+
+## Despliegue de Admin Web App
+
+El repositorio `LoResuelvo/loresuelvo-admin-webapp` invoca el workflow reutilizable
+`.github/workflows/deploy-admin-webapp.yml` desde un tag `vX.Y.Z`, con los mismos
+inputs `image-ref` y `release-tag` que Web App. `image-ref` debe ser un digest
+`ghcr.io/loresuelvo/gestion@sha256:…`. El caller debe conceder `contents: read`,
+`id-token: write` y `deployments: write`. El flujo despliega staging y luego
+producción, respetando la aprobación de su GitHub Environment.
+
+Antes del primer despliegue, volver a ejecutar la configuración Ansible sobre
+los nodos existentes para crear `/opt/loresuelvo/admin-webapp` y
+`/etc/loresuelvo/admin-webapp`. En Infisical, preparar `/admin-webapp` por ambiente
+con `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CONNECTION`, `AUTH0_CLIENT_ID`,
+`AUTH0_CLIENT_SECRET` y `AUTH0_SECRET` de la aplicación Admin, y autorizar su
+lectura a la identidad OIDC del workflow. Los defaults públicos están en
+`deploy/admin-webapp/config/{staging,prod}.conf`.
+
+El despliegue incluye la primaria y todas las réplicas existentes. Cada nodo
+registra la versión en `/opt/loresuelvo/admin-webapp/CURRENT_RELEASE` tras superar
+el healthcheck. Antes de crear nuevas réplicas debe existir un Deployment exitoso
+de Admin en ese ambiente; el escalado recupera esa versión por digest y verifica
+`https://gestion-test.loresuelvo.com.ar/` o `https://gestion.loresuelvo.com.ar/`
+en cada nodo antes de habilitarlo.
 
 ## Puesta en marcha de Cloudflare
 
@@ -145,7 +170,7 @@ Cloudflare se configura desde su panel, fuera de Terraform. Por ambiente:
 4. Configurar afinidad Cookie, Zero Downtime Failover Sticky, Adaptive Routing
    desactivado, shedding desactivado, proximity desactivado y sin custom rules.
 5. Crear los aliases DNS proxied como CNAME al hostname canónico: `api-test` en
-   staging; `api` y `www` en producción.
+   staging, junto con `gestion-test`; `api`, `www` y `gestion` en producción.
 6. Guardar el Account ID y el Pool ID en Infisical y ejecutar `Scale replicas`
    sólo cuando se quiera cambiar la cantidad de VMs.
 

@@ -74,4 +74,5 @@ jobs:
             --private-key "$RUNNER_TEMP/deploy-key" \
             ansible/playbooks/verify-deployment.yml \
             -e api_server_name="$API_SERVER_NAMES" \
-            -e web_server_name="${WEB_SERVER_NAMES%% *}"
+            -e web_server_name="${WEB_SERVER_NAMES%% *}" \
+            -e admin_server_name="${ADMIN_SERVER_NAMES%% *}"

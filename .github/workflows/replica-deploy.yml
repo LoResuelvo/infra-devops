@@ -79,6 +79,19 @@ jobs:
           export-type: file
           file-output-path: /webapp.env
 
+      - name: Export Admin Web App secrets
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: ${{ inputs.environment }}
+          secret-path: /admin-webapp
+          include-imports: false
+          recursive: false
+          export-type: file
+          file-output-path: /admin-webapp.env
+
       - uses: ./.github/actions/setup-ansible
 
       - name: Generate deployment inventory
@@ -101,7 +114,7 @@ jobs:
           printf '%s\n' "$CLOUDFLARE_ORIGIN_KEY" > "$RUNNER_TEMP/origin.key"
           chmod 0600 \
             "$RUNNER_TEMP"/{deploy-key,origin.crt,origin.key} \
-            "$GITHUB_WORKSPACE"/{api.env,webapp.env}
+            "$GITHUB_WORKSPACE"/{api.env,webapp.env,admin-webapp.env}
 
       - name: Download scale metadata
         uses: actions/download-artifact@v4
@@ -166,6 +179,24 @@ jobs:
             -e release_tag="$WEBAPP_RELEASE_TAG" \
             -e config_file="deploy/webapp/config/$config.conf" \
             -e secrets_file="$GITHUB_WORKSPACE/webapp.env"
+
+      - name: Hydrate Admin Web App
+
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          source "$RUNNER_TEMP/releases.env"
+          config=staging
+          [[ "$ENVIRONMENT" != production ]] || config=prod
+          ansible-playbook \
+            -i "$RUNNER_TEMP/inventory.json" \
+            --private-key "$RUNNER_TEMP/deploy-key" \
+            ansible/playbooks/deploy-admin-webapp.yml \
+            -e environment_name="$ENVIRONMENT" \
+            -e image_ref="$ADMIN_WEBAPP_IMAGE_REF" \
+            -e release_tag="$ADMIN_WEBAPP_RELEASE_TAG" \
+            -e config_file="deploy/admin-webapp/config/$config.conf" \
+            -e secrets_file="$GITHUB_WORKSPACE/admin-webapp.env"
 
       - name: Deploy gateway to replicas
         env:

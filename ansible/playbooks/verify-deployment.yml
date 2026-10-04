@@ -26,6 +26,7 @@
           - "https://{{ item.host }}{{ item.path }}"
       loop:
         - {host: "{{ web_server_name }}", path: /, status: '200'}
+        - {host: "{{ admin_server_name }}", path: /, status: '200'}
         - {host: "{{ api_server_name }}", path: /__gateway_ready, status: '200'}
       changed_when: false
       register: route_health

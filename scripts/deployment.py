@@ -120,6 +120,7 @@ def validate_tag(component: str, caller: str, ref_type: str, tag: str) -> None:
     expected = {
         "api": "LoResuelvo/loresuelvo-api",
         "webapp": "LoResuelvo/loresuelvo-webapp",
+        "admin-webapp": "LoResuelvo/loresuelvo-admin-webapp",
         "gateway": "LoResuelvo/infra-devops",
     }[component]
     if caller != expected:
@@ -132,7 +133,8 @@ def validate_release(component: str, caller: str, ref_type: str, caller_tag: str
     validate_tag(component, caller, ref_type, caller_tag)
     if tag != caller_tag:
         raise SystemExit("Caller and release must use the same tag.")
-    if not re.fullmatch(rf"ghcr\.io/loresuelvo/{component}@sha256:[a-f0-9]{{64}}", image):
+    image_name = "gestion" if component == "admin-webapp" else component
+    if not re.fullmatch(rf"ghcr\.io/loresuelvo/{image_name}@sha256:[a-f0-9]{{64}}", image):
         raise SystemExit("Image reference must be an immutable LoResuelvo digest.")
 
 
@@ -140,14 +142,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     release = commands.add_parser("release")
-    release.add_argument("component", choices=("api", "webapp", "gateway"))
+    release.add_argument("component", choices=("api", "webapp", "admin-webapp", "gateway"))
     release.add_argument("caller")
     release.add_argument("ref_type")
     release.add_argument("caller_tag")
     release.add_argument("image")
     release.add_argument("tag")
     tag = commands.add_parser("tag")
-    tag.add_argument("component", choices=("api", "webapp", "gateway"))
+    tag.add_argument("component", choices=("api", "webapp", "admin-webapp", "gateway"))
     tag.add_argument("caller")
     tag.add_argument("ref_type")
     tag.add_argument("tag")

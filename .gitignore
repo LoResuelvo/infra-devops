@@ -29,6 +29,7 @@ override.tf.json
 .env
 .deployment-secrets/
 **/api.env
+**/admin-webapp.env
 .venv/
 __pycache__/
 *.pyc

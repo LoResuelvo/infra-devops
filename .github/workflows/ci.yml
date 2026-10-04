@@ -32,7 +32,7 @@ jobs:
           IMAGE_REF: example.invalid/application:ci
           GATEWAY_IMAGE_REF: example.invalid/gateway:ci
         run: |
-          for component in api webapp gateway; do
+          for component in api webapp admin-webapp gateway; do
             docker compose -f "deploy/$component/compose.yml" config --quiet --no-env-resolution
           done
 

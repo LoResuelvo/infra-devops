@@ -66,6 +66,22 @@ class DeploymentTests(unittest.TestCase):
         with mock.patch.dict("os.environ", {"TF_PRIMARY_INSTANCE_NAME": "staging-primary", "TF_PRIMARY_INSTANCE_IPV4": "192.0.2.1"}):
             self.assertEqual(deployment.terraform_hosts({}), [{"role": "primary", "name": "staging-primary", "ipv4": "192.0.2.1"}])
 
+    def test_admin_release_requires_its_caller_tag_and_gestion_digest(self):
+        image = "ghcr.io/loresuelvo/gestion@sha256:" + "a" * 64
+        valid = ("LoResuelvo/loresuelvo-admin-webapp", "tag", "v1.2.3", image, "v1.2.3")
+        deployment.validate_release("admin-webapp", *valid)
+        for index, invalid in (
+            (0, "LoResuelvo/loresuelvo-webapp"),
+            (1, "branch"),
+            (3, "ghcr.io/loresuelvo/gestion:v1.2.3"),
+            (3, "ghcr.io/loresuelvo/webapp@sha256:" + "a" * 64),
+            (4, "v1.2.4"),
+        ):
+            arguments = list(valid)
+            arguments[index] = invalid
+            with self.subTest(index=index, invalid=invalid), self.assertRaises(SystemExit):
+                deployment.validate_release("admin-webapp", *arguments)
+
     def test_cloudflare_origins_do_not_create_an_absent_replica_while_draining(self):
         hosts = deployment.hosts([
             {"role": "primary", "name": "existing-staging-instance", "ipv4": "192.0.2.1"},

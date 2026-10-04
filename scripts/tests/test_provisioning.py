@@ -76,6 +76,36 @@ class ProvisioningTests(unittest.TestCase):
             with self.subTest(tag=tag), patch.object(releases, "request_json", side_effect=responses):
                 self.assertEqual(releases.latest_successful("gateway", "production", "https://api.test"), (tag, image))
 
+    def test_admin_resolution_requires_successful_gestion_metadata(self):
+        image = "ghcr.io/loresuelvo/gestion@sha256:" + "a" * 64
+        for environment in ("staging", "production"):
+            responses = [
+                [{"id": 1}, {"id": 2}, {"id": 3}],
+                [{"state": "failure"}],
+                [{"state": "success", "environment_url":
+                  f"https://github.com/release#release_tag=v1.2.3&image_ref={image.replace('/gestion@', '/webapp@')}"}],
+                [{"state": "success", "environment_url":
+                  f"https://github.com/release#release_tag=v1.2.3&image_ref={image}"}],
+            ]
+            with self.subTest(environment=environment), patch.object(releases, "request_json", side_effect=responses) as request:
+                self.assertEqual(releases.latest_successful("admin-webapp", environment, "https://api.test"), ("v1.2.3", image))
+                self.assertIn(f"/repos/LoResuelvo/loresuelvo-admin-webapp/deployments?environment={environment}", request.call_args_list[0].args[0])
+        with patch.object(releases, "request_json", return_value=[]):
+            with self.assertRaisesRegex(SystemExit, "No valid successful admin-webapp deployment"):
+                releases.latest_successful("admin-webapp", "staging", "https://api.test")
+
+    def test_resolved_releases_export_admin_variables_for_replica_hydration(self):
+        image = "ghcr.io/loresuelvo/gestion@sha256:" + "a" * 64
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "releases.env"
+            with patch("sys.argv", ["resolve-deployed-images.py", "staging", str(output)]), patch.object(
+                releases, "latest_successful", return_value=("v1.2.3", image)
+            ) as resolve:
+                releases.main()
+            self.assertIn("admin-webapp", [call.args[0] for call in resolve.call_args_list])
+            self.assertIn(f"ADMIN_WEBAPP_RELEASE_TAG=v1.2.3\nADMIN_WEBAPP_IMAGE_REF={image}\n", output.read_text())
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
     def test_release_resolution_continues_past_environment_job_records(self):
         image = "ghcr.io/loresuelvo/gateway@sha256:" + "a" * 64
         first_page = [{"id": number} for number in range(20)]
