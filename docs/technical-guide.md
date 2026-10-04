@@ -94,10 +94,20 @@ Los despliegues remotos usan los módulos de Docker Compose, copia, plantillas y
 healthchecks de Ansible. El inventario privado se genera durante el job y no se
 publica como output ni artifact.
 Los dominios, el package y la huella del certificado de Android App Links se
-declaran en `deploy/gateway/config/{staging,prod}.conf`. La huella contiene un
-valor temporal hasta que exista el certificado que firma cada aplicación.
+declaran en `deploy/gateway/config/{staging,prod}.conf`. El package y la huella
+SHA-256 son datos públicos: Android consulta la huella en
+`https://<dominio-web>/.well-known/assetlinks.json` para verificar la aplicación.
+La huella no permite recuperar la clave privada ni firmar APKs. El keystore y
+sus contraseñas permanecen en Secrets del pipeline de Android; las claves TLS
+del gateway se obtienen de Infisical y no se versionan.
+Staging tiene la huella del certificado real; producción conserva un placeholder
+hasta configurar el certificado que firma la aplicación distribuida.
 Ansible prepara también `/opt/loresuelvo/gateway/nginx` como `deploy:deploy`,
-modo `0750`: ejecutar el setup antes del primer despliegue en un nodo nuevo.
+modo `0755`, al igual que su directorio padre, para que nginx pueda servir
+`assetlinks.json` con modo `0644`. Los archivos de configuración mantienen modo
+`0640` y los secretos están separados en `/etc/loresuelvo/gateway/tls`, cuyo
+directorio tiene modo `0700` y cuya clave privada tiene modo `0600`.
+Ejecutar el setup antes del primer despliegue en un nodo nuevo.
 La imagen del gateway contiene únicamente nginx fijado por digest. Un tag
 `vX.Y.Z` versiona la imagen junto con Compose, plantillas y configuración
 pública, y publica el digest inmutable en la URL de su GitHub Deployment. El
