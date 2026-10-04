@@ -69,7 +69,7 @@ jobs:
           identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
           project-slug: lo-resuelvo-7j-te
           env-slug: ${{ inputs.environment }}
-          secret-path: /admin-webapp
+          secret-path: /webapp-admin
           include-imports: false
           recursive: false
           export-type: file

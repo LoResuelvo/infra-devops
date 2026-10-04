@@ -117,7 +117,7 @@ En Infisical, para cada ambiente, usar rutas consistentes:
 /deployments     # claves deploy, GHCR y certificado del gateway
 /api             # configuración privada de API
 /webapp          # configuración privada de Web App
-/admin-webapp    # configuración privada de Admin Web App
+/webapp-admin    # configuración privada de Admin Web App
 ```
 
 `/infrastructure` debe incluir `DATADOG_API_KEY`, `TF_PRIMARY_INSTANCE_NAME`,
@@ -143,11 +143,19 @@ producción, respetando la aprobación de su GitHub Environment.
 
 Antes del primer despliegue, volver a ejecutar la configuración Ansible sobre
 los nodos existentes para crear `/opt/loresuelvo/admin-webapp` y
-`/etc/loresuelvo/admin-webapp`. En Infisical, preparar `/admin-webapp` por ambiente
-con `AUTH0_DOMAIN`, `AUTH0_AUDIENCE`, `AUTH0_CONNECTION`, `AUTH0_CLIENT_ID`,
-`AUTH0_CLIENT_SECRET` y `AUTH0_SECRET` de la aplicación Admin, y autorizar su
-lectura a la identidad OIDC del workflow. Los defaults públicos están en
-`deploy/admin-webapp/config/{staging,prod}.conf`.
+`/etc/loresuelvo/admin-webapp`. En Infisical, preparar `/webapp-admin` por ambiente
+con `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET` y `AUTH0_SECRET` de la aplicación
+Admin, y autorizar su lectura a la identidad OIDC del workflow. Los valores
+públicos `AUTH0_DOMAIN`, `AUTH0_AUDIENCE` y `AUTH0_CONNECTION` se configuran
+por ambiente en `deploy/admin-webapp/config/{staging,prod}.conf`, junto con
+`APP_URL` y `API_URL`. La conexión debe ser la dedicada a Admin en ese ambiente.
+
+`AUTH0_CONNECTION` queda vacío hasta confirmar el nombre real de la conexión
+de Admin en cada ambiente. Completarlo antes de desplegar: el código actual de
+Admin lo exige y Ansible detiene el despliegue con un mensaje explícito si falta.
+Se consulta en Auth0, Applications → Applications → aplicación Admin → Connections.
+Una vez completados y publicados los valores en infra, reintentar la release
+fallida de Admin desde GitHub Actions.
 
 El despliegue incluye la primaria y todas las réplicas existentes. Cada nodo
 registra la versión en `/opt/loresuelvo/admin-webapp/CURRENT_RELEASE` tras superar
