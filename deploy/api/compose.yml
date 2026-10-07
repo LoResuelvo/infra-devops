@@ -3,6 +3,8 @@ services:
     image: ${IMAGE_REF:?IMAGE_REF is required}
     env_file:
       - /etc/loresuelvo/api/api.env
+    volumes:
+      - /etc/loresuelvo/api/firebase.json:/etc/loresuelvo/api/firebase.json:ro
     ports:
       - "127.0.0.1:8080:8080"
     restart: unless-stopped

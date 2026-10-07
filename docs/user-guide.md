@@ -132,6 +132,112 @@ R2 privados y el environment GitHub `production-infrastructure` con aprobación
 requerida. No guardar cantidades de réplicas ni inventarios derivados en
 Infisical.
 
+## Firebase Cloud Messaging de la API
+
+La API ya lee `FCM_ENABLED`, `FCM_PROJECT_ID`, `FCM_TIMEOUT` y
+`GOOGLE_APPLICATION_CREDENTIALS`. Configurar Infisical por ambiente:
+
+| Ruta | Clave | Valor |
+| --- | --- | --- |
+| `/deployments` | `FCM_SERVICE_ACCOUNT_JSON` | Contenido completo del JSON privado de la cuenta de envío, sin base64 |
+| `/api` | `FCM_PROJECT_ID` | ID del proyecto Firebase del ambiente |
+
+El ID del proyecto también se administra en Infisical por decisión del equipo.
+Aunque identifica el proyecto, no autentica al servidor. La credencial JSON sí
+contiene una clave privada y permite actuar como la cuenta de servicio.
+
+La configuración pública queda en `deploy/api/config/staging.conf` y `prod.conf`:
+
+```dotenv
+FCM_ENABLED=true
+FCM_TIMEOUT=5s
+GOOGLE_APPLICATION_CREDENTIALS=/etc/loresuelvo/api/firebase.json
+```
+
+No es necesario duplicar estos tres valores en Infisical. Si ya existen en
+`/api`, sus valores prevalecen sobre los `.conf`: eliminar esos overrides o
+alinearlos antes de desplegar.
+
+El proyecto staging identificado en las variables de Consumer es
+`loresuelvo-staging`, número `987303970692`. Su App ID de App Distribution es
+`1:987303970692:android:ff891663751a63b9d83fd1`. Producción debe usar un proyecto
+separado, aún pendiente de verificar. Habilitar `fcm.googleapis.com` y usar una
+cuenta dedicada al envío con `roles/firebasecloudmessaging.admin` en el proyecto
+destinatario, separada de la cuenta de App Distribution.
+
+Una cuenta de servicio es una identidad para programas: en este caso, la API
+la utiliza para autenticarse ante Google y enviar notificaciones. El nombre
+`FCM_SERVICE_ACCOUNT_JSON` es el nombre del secreto que usa este despliegue;
+Google entrega un archivo JSON, no una variable con ese nombre.
+
+Para obtenerlo, repetir por ambiente:
+
+1. Abrir Google Cloud Console y seleccionar el proyecto Firebase correspondiente.
+2. En **IAM y administración → Cuentas de servicio → Crear cuenta de servicio**,
+   crear una cuenta dedicada, por ejemplo `loresuelvo-fcm`.
+3. Otorgarle en ese proyecto el rol **Firebase Cloud Messaging API Admin**
+   (`roles/firebasecloudmessaging.admin`), que permite enviar mensajes.
+4. Abrir la cuenta y entrar a **Claves → Agregar clave → Crear clave → JSON**.
+   Se descargará el archivo con campos como `client_email` y `private_key`.
+5. Copiar el contenido completo del archivo, desde `{` hasta `}`, al secreto
+   `FCM_SERVICE_ACCOUNT_JSON` de Infisical, path `/deployments`, en el ambiente
+   correspondiente. No convertirlo a base64 ni copiar solo `private_key`.
+6. En `/api`, cargar `FCM_PROJECT_ID` con el ID del proyecto destinatario y
+   verificar que la API `fcm.googleapis.com` esté habilitada antes de desplegar.
+
+No reutilizar la cuenta de App Distribution. El JSON privado tampoco es el
+`google-services.json` de Android y no debe ir en Git ni en los APKs.
+Referencias: [crear una clave JSON](https://docs.cloud.google.com/iam/docs/keys-create-delete)
+y [permisos de FCM](https://docs.cloud.google.com/iam/docs/roles-permissions/firebasecloudmessaging).
+
+`GOOGLE_APPLICATION_CREDENTIALS` **es una ruta dentro del contenedor**, elegida
+por infraestructura; no es un valor que se copie desde Firebase. Ya está fijada
+en `deploy/api/config/staging.conf` y `prod.conf`:
+
+```dotenv
+GOOGLE_APPLICATION_CREDENTIALS=/etc/loresuelvo/api/firebase.json
+```
+
+No hace falta agregar esa variable a Infisical. El flujo existente la incorpora
+a `api.env`. Los workflows preparan el JSON en `$RUNNER_TEMP/firebase.json` y
+Ansible lo copia a `/etc/loresuelvo/api/firebase.json` en cada nodo con permisos
+`0600`, dentro del directorio privado existente. Compose monta ese archivo en
+la misma ruta, en solo lectura, únicamente para `api`. La biblioteca de Google
+lee el archivo indicado por la variable y obtiene los tokens de acceso para FCM.
+Ver [autorización oficial de FCM](https://firebase.google.com/docs/cloud-messaging/send/v1-api).
+
+Push queda habilitado en los dos `.conf`. Antes del próximo despliegue, cargar
+la credencial y el proyecto en ambos ambientes: sin el secreto, el workflow
+prepara un archivo vacío y la API no puede arrancar con FCM activo. Cambiar el
+repositorio no configura Firebase ni carga secretos automáticamente. Para
+desactivar, poner `FCM_ENABLED=false` en el `.conf` del ambiente y redesplegar
+todos los nodos, revisando que Infisical no sobrescriba ese valor; WebSocket y operaciones
+de negocio continúan. Al rotar el JSON, el playbook recrea el contenedor para
+cargar la nueva credencial. Revocar la clave anterior después de verificar el
+despliegue. Releases y altas de réplicas reciben el mismo archivo del ambiente.
+
+Para Android, registrar los packages `com.loresuelvo.consumer` y
+`com.loresuelvo.serviceprovider`, con registros adicionales `.dev` y `.staging`.
+Prestador recibe `google-services.json` en `app/src/<flavor>/`. Consumer utiliza
+`FIREBASE_APPLICATION_ID`, `FIREBASE_API_KEY`, `FIREBASE_PROJECT_ID` y
+`FIREBASE_SENDER_ID`, con sufijos `_STAGING` y `_PROD` para esos flavors.
+Coordinar su entrega antes de Gradle con los responsables de los workflows
+Android; App Distribution no sustituye esa configuración.
+
+El cierre de infra #8 requiere verificar HTTPS saliente hacia
+`oauth2.googleapis.com` y `fcm.googleapis.com` desde los nodos, un envío FCM
+data-only al dispositivo y otro originado por una operación real de API.
+Comprobar destinatario/app/binding y que las réplicas no multipliquen intentos;
+un único popup no alcanza porque Android deduplica. Registrar evidencia
+sanitizada en `results/`, sin claves ni tokens completos. Estas pruebas remotas
+siguen pendientes. No se requieren nuevos puertos entrantes ni servicios.
+
+Para API local y app Dev, usar teléfono con Google Play o emulador Google
+APIs/Play e Internet para FCM. Con USB: `adb reverse tcp:8080 tcp:8080` y
+`API_URL=http://127.0.0.1:8080`; alternativamente usar la IP LAN del backend.
+Montar también la credencial si la API local corre en Docker. AOSP queda para
+pruebas simuladas; staging y producción conservan HTTPS.
+
 ## Despliegue de Admin Web App
 
 El repositorio `LoResuelvo/loresuelvo-admin-webapp` invoca el workflow reutilizable

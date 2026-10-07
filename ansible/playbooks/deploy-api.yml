@@ -23,6 +23,14 @@
           - ghcr_token | length > 0
       no_log: true
   tasks:
+    - name: Install FCM server credential
+      ansible.builtin.copy:
+        src: "{{ firebase_credentials_file }}"
+        dest: /etc/loresuelvo/api/firebase.json
+        mode: "0600"
+      register: api_fcm_credential
+      no_log: true
+      
     - name: Install API environment
       ansible.builtin.copy:
         dest: /etc/loresuelvo/api/api.env
@@ -74,6 +82,7 @@
         project_src: /opt/loresuelvo/api
         services: [api]
         state: present
+        recreate: "{{ 'always' if api_fcm_credential is changed else 'auto' }}"
       environment:
         IMAGE_REF: "{{ image_ref }}"
     - name: Wait for API readiness
