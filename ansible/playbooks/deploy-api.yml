@@ -30,7 +30,6 @@
         mode: "0600"
       register: api_fcm_credential
       no_log: true
-      
     - name: Install API environment
       ansible.builtin.copy:
         dest: /etc/loresuelvo/api/api.env
