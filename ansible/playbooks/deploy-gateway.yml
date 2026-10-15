@@ -7,6 +7,9 @@
   vars:
     ghcr_user: "{{ lookup('env', 'GHCR_USER') }}"
     ghcr_token: "{{ lookup('env', 'GHCR_TOKEN') }}"
+    android_app_link_additional_apps: >-
+      {{ (lookup('file', playbook_dir + '/../../deploy/gateway/config/additional-android-app-links.json') |
+          from_json).get(android_app_link_package_name, []) }}
   pre_tasks:
     - name: Check SSH connection and remote Python
       ansible.builtin.ping:
@@ -28,6 +31,15 @@
             match('^([A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}$')
           - image_ref is match('^nginx@') or (ghcr_user | length > 0 and ghcr_token | length > 0)
       no_log: true
+    - name: Validate additional Android App Links applications
+      ansible.builtin.assert:
+        that:
+          - item.package_name is match('^[A-Za-z][A-Za-z0-9_.]*$')
+          - item.sha256_cert_fingerprints | length > 0
+          - >-
+            item.sha256_cert_fingerprints |
+            reject('match', '^([A-Fa-f0-9]{2}:){31}[A-Fa-f0-9]{2}$') | list | length == 0
+      loop: "{{ android_app_link_additional_apps }}"
   tasks:
     - name: Ensure gateway bind mount is traversable by nginx
       ansible.builtin.file:

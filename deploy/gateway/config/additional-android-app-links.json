@@ -1,0 +1,10 @@
+{
+  "com.loresuelvo.consumer.staging": [
+    {
+      "package_name": "com.loresuelvo.serviceprovider.staging",
+      "sha256_cert_fingerprints": [
+        "51:36:E5:2E:52:A0:E8:6A:CF:80:95:B8:85:C8:D1:C8:63:2D:CF:BF:D7:D9:56:65:C3:B4:5C:4F:13:20:7B:85"
+      ]
+    }
+  ]
+}

@@ -40,6 +40,8 @@ with tempfile.TemporaryDirectory() as directory:
              "android_app_link_package_name", "android_app_link_sha256_cert_fingerprint"),
             config.stdout.splitlines(), strict=True,
         ))
+        additional_apps = json.loads((gateway / "config/additional-android-app-links.json").read_text())
+        values["android_app_link_additional_apps"] = additional_apps.get(values["android_app_link_package_name"], [])
         rendered = root / name
         rendered.mkdir()
         for filename in ("default.conf", "assetlinks.json"):

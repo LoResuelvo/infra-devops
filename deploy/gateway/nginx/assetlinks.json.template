@@ -11,4 +11,18 @@
       ]
     }
   }
+{% for app in android_app_link_additional_apps | default([]) %}
+  ,{
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "{{ app.package_name }}",
+      "sha256_cert_fingerprints": [
+{% for fingerprint in app.sha256_cert_fingerprints %}
+        "{{ fingerprint }}"{{ "," if not loop.last else "" }}
+{% endfor %}
+      ]
+    }
+  }
+{% endfor %}
 ]
