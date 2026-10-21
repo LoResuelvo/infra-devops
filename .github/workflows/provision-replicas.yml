@@ -1,58 +1,75 @@
-name: Scale replicas
+name: Reconcile staging replicas
 
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: Environment to provision
+      action:
+        description: Inspect only, or clean partial replica resources and reconcile state
         type: choice
+        options: [inspect, reconcile]
+        default: inspect
         required: true
-        options:
-          - staging
-          - production
-      desired-replica-count:
-        description: Total desired number of replicas
-        type: number
-        required: true
+
 permissions:
   contents: read
   id-token: write
-  deployments: read
 
 concurrency:
-  group: provision-replicas-${{ inputs.environment }}
+  group: provision-replicas-staging
   cancel-in-progress: false
 
 jobs:
-  plan:
-    name: Plan replica change
-    uses: ./.github/workflows/replica-plan.yml
-    with:
-      environment: ${{ inputs.environment }}
-      terraform-root: terraform/environments/${{ inputs.environment }}/replicas
-      desired-replica-count: ${{ fromJSON(inputs.desired-replica-count) }}
-    secrets: inherit
-
-  scale-up:
-    name: Scale UP
-    needs: plan
-    if: needs.plan.outputs.decision == 'grow'
-    uses: ./.github/workflows/scale-up.yml
-    with:
-      environment: ${{ inputs.environment }}
-      terraform-root: terraform/environments/${{ inputs.environment }}/replicas
-      desired-replica-count: ${{ fromJSON(inputs.desired-replica-count) }}
-      current-replica-count: ${{ needs.plan.outputs.current-count }}
-    secrets: inherit
-
-  scale-down:
-    name: Scale DOWN
-    needs: plan
-    if: needs.plan.outputs.decision == 'shrink'
-    uses: ./.github/workflows/scale-down.yml
-    with:
-      environment: ${{ inputs.environment }}
-      terraform-root: terraform/environments/${{ inputs.environment }}/replicas
-      desired-replica-count: ${{ fromJSON(inputs.desired-replica-count) }}
-      current-replica-count: ${{ needs.plan.outputs.current-count }}
-    secrets: inherit
+  reconcile:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v6
+      - name: Fetch infrastructure secrets
+        uses: Infisical/secrets-action@v1.0.17
+        with:
+          method: oidc
+          identity-id: cc123a18-b15c-4ac4-9027-35e66af9c972
+          project-slug: lo-resuelvo-7j-te
+          env-slug: staging
+          secret-path: /infrastructure
+          include-imports: false
+          recursive: false
+      - uses: ./.github/actions/setup-terraform
+        with:
+          environment: staging
+          terraform-root: terraform/environments/staging/replicas
+      - name: Check no replica is receiving traffic
+        run: |
+          pool_url="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/load_balancers/pools/$CLOUDFLARE_POOL_ID"
+          curl --silent --show-error --fail-with-body \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$pool_url" > "$RUNNER_TEMP/pool.json"
+          python3 scripts/provisioning/validate-staging-recovery.py pool "$RUNNER_TEMP/pool.json"
+      - name: Plan cleanup of partial replica only
+        env:
+          TERRAFORM_ROOT: terraform/environments/staging/replicas
+        run: |
+          if ! terraform -chdir="$TERRAFORM_ROOT" plan -input=false \
+            -lock-timeout=60s -var=replica_count=0 \
+            -out="$RUNNER_TEMP/recovery.tfplan" \
+            > "$RUNNER_TEMP/recovery-plan.log" 2>&1; then
+            echo 'Terraform recovery plan failed; no apply was performed.' >&2
+            exit 1
+          fi
+          terraform -chdir="$TERRAFORM_ROOT" show -json \
+            "$RUNNER_TEMP/recovery.tfplan" > "$RUNNER_TEMP/recovery-plan.json"
+          python3 scripts/provisioning/validate-staging-recovery.py plan \
+            "$RUNNER_TEMP/recovery-plan.json" >> "$GITHUB_STEP_SUMMARY"
+      - name: Apply reviewed cleanup plan
+        if: inputs.action == 'reconcile'
+        env:
+          TERRAFORM_ROOT: terraform/environments/staging/replicas
+        run: |
+          if ! terraform -chdir="$TERRAFORM_ROOT" apply -input=false \
+            -lock-timeout=60s "$RUNNER_TEMP/recovery.tfplan" \
+            > "$RUNNER_TEMP/recovery-apply.log" 2>&1; then
+            echo 'Terraform cleanup failed; state must be inspected before retry.' >&2
+            exit 1
+          fi
+          terraform -chdir="$TERRAFORM_ROOT" output -json > "$RUNNER_TEMP/reconciled-outputs.json"
+          python3 scripts/provisioning/validate-staging-recovery.py outputs "$RUNNER_TEMP/reconciled-outputs.json"
