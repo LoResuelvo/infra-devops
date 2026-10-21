@@ -17,13 +17,15 @@ def load_plan(profile, rate):
     """Consultar la matriz JS con el mismo k6 que ejecutará la prueba, sin red."""
     if profile not in ("smoke", "warmup", "explore", "sustained", "spike", "availability"):
         raise ValueError("Unknown profile")
-    allowed_rates = (0.5, 1) if profile == "availability" else (1, 2, 5, 10, 20, 40)
+    allowed_rates = (0.5, 1) if profile == "availability" else (0.5, 1, 2, 5, 10, 20, 40)
     if rate is not None and rate not in allowed_rates:
         raise ValueError("Rate must belong to the bounded exploration matrix")
     if profile in ("sustained", "spike", "availability") and rate is None:
         raise ValueError("A validated reference rate is required")
     if profile in ("smoke", "warmup") and rate is not None:
         raise ValueError("Smoke and warmup use fixed load")
+    if profile == "spike" and rate == 0.5:
+        raise ValueError("Spike requires an integer reference rate")
     command = [
         "docker",
         "run",

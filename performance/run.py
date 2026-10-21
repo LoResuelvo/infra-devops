@@ -26,6 +26,8 @@ def parse_args():
         required=True,
     )
     parser.add_argument("--rate", type=float)
+    parser.add_argument("--sustained-seconds", type=int, choices=(180, 300), default=180)
+    parser.add_argument("--repetitions", type=int, choices=(1, 2, 3), default=2)
     parser.add_argument("--p95-limit-ms", type=int, choices=(1500, 2000), default=1500,
                         help="SLO declarado antes de ejecutar; se conserva en los resultados")
     parser.add_argument("--history", help="Campaign directory under results/ containing prior remote summaries")
@@ -104,6 +106,10 @@ def main():
         raise ValueError("Private consumer cookie required")
 
     runs = load_plan(args.profile, args.rate)
+    if args.profile == "sustained":
+        executor, _, rate = runs[0]
+        executor = dict(executor, duration=f"{args.sustained_seconds}s")
+        runs = [(executor, args.sustained_seconds, rate) for _ in range(args.repetitions)]
     if args.profile == "availability" and (args.scenario != "web" or args.nodes != 2):
         raise ValueError("Availability measures authenticated web traffic with two initial nodes")
     output = results_path(args.out)
@@ -122,7 +128,8 @@ def main():
         folder = output / f"run-{repetition}"
         result = execute(config, folder, metadata, executor, output / "STOP")
         print(f"run-{repetition}: valid={result['valid']}")
-        if not result["valid"] and (args.profile != "explore" or not safe_to_increase(result)):
+        continue_measurement = args.profile in ("explore", "sustained") and safe_to_increase(result)
+        if not result["valid"] and not continue_measurement:
             break
     aggregate(output)
 

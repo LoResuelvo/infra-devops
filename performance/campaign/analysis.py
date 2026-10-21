@@ -73,6 +73,8 @@ def summarize(points, metadata, exit_code):
     http_error_rate = statistics.mean(http_errors) if http_errors else 1
     p95 = percentile(durations, 0.95)
     p95_limit = metadata.get("p95_limit_ms", 1500)
+    measurement_valid = bool(durations) and exit_code in (0, 99) and dropped == 0
+    slo_met = bool(durations) and error_rate < 0.01 and http_error_rate < 0.01 and p95 < p95_limit
 
     valid = (
         bool(durations)
@@ -97,6 +99,8 @@ def summarize(points, metadata, exit_code):
         requests_s=requests / metadata["seconds"],
         exit_code=exit_code,
         valid=valid,
+        measurement_valid=measurement_valid,
+        slo_met=slo_met,
         recovery=recovery_status(windows) if metadata["profile"] == "spike" else "not_applicable",
     )
     result["windows"] = [

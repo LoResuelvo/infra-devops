@@ -136,6 +136,20 @@ def test_summary_contract():
     assert not summarize(points, {"scenario": "api", "profile": "smoke", "seconds": 30}, 1)["valid"]
 
 
+def test_latency_failure_preserves_valid_measurement():
+    points = [
+        {"metric": "operation_ms", "data": {"value": 1800, "tags": {"window": "0", "failed": "false"}}},
+        {"metric": "http_reqs", "data": {"value": 1}},
+        {"metric": "http_req_failed", "data": {"value": 0}},
+    ]
+    result = summarize(points, {"profile": "sustained", "seconds": 300}, 99)
+    assert result["measurement_valid"]
+    assert not result["slo_met"]
+    assert not result["valid"]
+    points.append({"metric": "dropped_iterations", "data": {"value": 1}})
+    assert not summarize(points, {"profile": "sustained", "seconds": 300}, 99)["measurement_valid"]
+
+
 def test_exploration_continues_past_slo_but_not_generator_failure():
     result = {
         "samples": 60,
@@ -260,6 +274,8 @@ def test_http_contract_and_private_exports(report_dir, config, server, scenario,
         ("warmup", None, 60, [1]),
         ("explore", None, 60, [1, 2, 5, 10, 20, 40]),
         ("sustained", 10, 180, [10, 10]),
+        ("explore", .5, 60, [.5]),
+        ("sustained", .5, 180, [.5, .5]),
         ("spike", 5, 180, [5]),
         ("availability", .5, 1200, [.5]),
     ],

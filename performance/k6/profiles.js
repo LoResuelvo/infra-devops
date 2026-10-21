@@ -1,7 +1,7 @@
 // Matriz y executors de k6. Este archivo también se ejecuta sin red para
 // entregar el plan a Python; no realiza solicitudes ni carga durante ese paso.
 const EXPLORATION_RATES = [1, 2, 5, 10, 20, 40];
-const VALIDATED_RATES = EXPLORATION_RATES;
+const VALIDATED_RATES = [0.5, ...EXPLORATION_RATES];
 const ARRIVAL_OPTIONS = {
   preAllocatedVUs: 200,
   maxVUs: 200,
@@ -63,8 +63,8 @@ export function buildPlan(profile, rate) {
   return rates.map(offeredRate => [{
     ...ARRIVAL_OPTIONS,
     executor: 'constant-arrival-rate',
-    rate: offeredRate,
-    timeUnit: '1s',
+    rate: offeredRate * 2,
+    timeUnit: '2s',
     duration: `${seconds}s`,
   }, seconds, offeredRate]);
 }

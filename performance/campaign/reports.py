@@ -25,6 +25,8 @@ CSV_FIELDS = [
     "completed_ops_s",
     "requests_s",
     "valid",
+    "measurement_valid",
+    "slo_met",
     "recovery",
 ]
 
@@ -32,7 +34,7 @@ CSV_FIELDS = [
 def compare_topologies(results):
     lines = []
     for scenario in ("api", "web"):
-        for rate in (1, 2, 5, 10, 20, 40):
+        for rate in (0.5, 1, 2, 5, 10, 20, 40):
             by_nodes = {1: [], 2: []}
             for result in results:
                 matches_reference = (
@@ -72,13 +74,14 @@ def aggregate(root):
         "",
         "Resultados privados. No extrapolar a producción, tres nodos ni escrituras.",
         "",
-        "| Escenario | Perfil | Nodos | R | p95 ms | Válida | Recuperación |",
-        "|---|---|---|---|---|---|---|",
+        "| Escenario | Perfil | Nodos | R | p95 ms | Medición válida | Cumple objetivo | Recuperación |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for result in results:
         lines.append(
             f"| {result['scenario']} | {result['profile']} | {result['nodes']} "
-            f"| {result['reference_R']} | {result['p95']} | {result['valid']} "
+            f"| {result['reference_R']} | {result['p95']} | {result.get('measurement_valid', 'no registrado')} "
+            f"| {result.get('slo_met', 'no registrado')} "
             f"| {result['recovery']} |"
         )
     lines += ["", "## Comparación de repeticiones sostenidas", ""]

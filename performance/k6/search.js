@@ -53,7 +53,7 @@ function get(path, metricName) {
   if (run.scenario === 'web') {
     headers.Cookie = config.cookie;
   }
-  if (run.profile === 'availability') {
+  if (run.profile === 'availability' || run.nodes === 2) {
     // Remove edge affinity without changing the explicit consumer session.
     http.cookieJar().clear(config[`${run.scenario}_url`]);
   }
